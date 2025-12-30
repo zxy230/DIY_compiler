@@ -28,13 +28,9 @@ PARSER_H = $(PARSER_DIR)/parser.tab.h
 
 # C++ source files
 CPP_SRCS = $(wildcard $(SRC_DIR)/*.cpp)
-CPP_SRCS += $(wildcard $(SEMANTIC_DIR)/*.h)
-CPP_SRCS += $(wildcard $(IR_DIR)/*.h)
-CPP_SRCS += $(wildcard $(CODEGEN_DIR)/*.h)
-CPP_SRCS := $(filter-out $(SRC_DIR)/main.cpp, $(CPP_SRCS))
 
-# Object files
-OBJS = $(CPP_SRCS:.cpp=.o) main.o parser.tab.o lexer.yy.o
+# Object files (generated in src dir)
+OBJS = $(CPP_SRCS:.cpp=.o) parser.tab.o lexer.yy.o
 
 # Target
 TARGET = toycc
@@ -63,6 +59,10 @@ lexer.yy.o: $(LEXER_OUT)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 %.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Object files go in src/
+main.o: $(SRC_DIR)/main.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
