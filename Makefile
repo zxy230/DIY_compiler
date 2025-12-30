@@ -50,6 +50,8 @@ $(LEXER_OUT): $(LEXER_SRC)
 $(PARSER_CPP) $(PARSER_H): $(PARSER_SRC)
 	cd $(PARSER_DIR) && $(BISON) -d -o parser.tab.cpp parser.y
 	mv $(PARSER_DIR)/parser.tab.hpp $(PARSER_H) 2>/dev/null || true
+	sed -i '90 i #include "ast_node.h"' $(PARSER_H)
+	sed -i 's|#include "parser.tab.hpp"|#include "parser/parser.tab.h"|' $(PARSER_CPP)
 
 # Compile C++ files
 parser.tab.o: $(PARSER_CPP)
