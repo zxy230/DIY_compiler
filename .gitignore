@@ -4,7 +4,7 @@ toycc
 src/*.o
 src/parser/*.o
 src/lexer/*.o
-
+*.s
 # Generated files
 src/lexer/lexer.yy.cpp
 src/parser/parser.tab.cpp
