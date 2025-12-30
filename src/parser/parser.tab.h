@@ -35,11 +35,14 @@
    especially those whose name start with YY_ or yy_.  They are
    private implementation details that can be changed or removed.  */
 
-#ifndef YY_YY_SRC_PARSER_PARSER_TAB_HPP_INCLUDED
-# define YY_YY_SRC_PARSER_PARSER_TAB_HPP_INCLUDED
+#ifndef YY_YY_PARSER_TAB_HPP_INCLUDED
+# define YY_YY_PARSER_TAB_HPP_INCLUDED
 /* Debug traces.  */
 #ifndef YYDEBUG
 # define YYDEBUG 0
+#endif
+#if YYDEBUG
+extern int yydebug;
 #endif
 
 /* Token kinds.  */
@@ -84,17 +87,14 @@
     SEMICOLON = 288                /* SEMICOLON  */
   };
   typedef enum yytokentype yytoken_kind_t;
+#include "ast_node.h"
 #endif
 
-#include <vector>
-#include <memory>
-#include <string>
-#include "ast_node.h"
 /* Value type.  */
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 79 "src/parser/parser.y"
+#line 79 "parser.y"
 
     int num;
     std::string* str;
@@ -107,7 +107,7 @@ union YYSTYPE
     FuncDef* func;
     Program* program;
 
-#line 110 "src/parser/parser.tab.hpp"
+#line 110 "parser.tab.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
@@ -122,4 +122,4 @@ extern YYSTYPE yylval;
 int yyparse (void);
 
 
-#endif /* !YY_YY_SRC_PARSER_PARSER_TAB_HPP_INCLUDED  */
+#endif /* !YY_YY_PARSER_TAB_HPP_INCLUDED  */
