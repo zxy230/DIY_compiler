@@ -2,7 +2,7 @@
 
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -g -I. -I./src -I./src/parser -I./src/semantic -I./src/ir -I./src/codegen
-LDFLAGS = -lfl
+LDFLAGS =
 
 # Flex/Bison
 FLEX = flex
