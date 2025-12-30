@@ -1,0 +1,25 @@
+# Build artifacts
+toycc
+*.o
+src/*.o
+src/parser/*.o
+src/lexer/*.o
+
+# Generated files
+src/lexer/lexer.yy.cpp
+src/parser/parser.tab.cpp
+src/parser/parser.tab.h
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+*.log
