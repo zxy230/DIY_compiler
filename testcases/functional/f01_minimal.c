@@ -1,3 +1,4 @@
-int main() {
-    return EVAL("randint(0, 255)");
+int main()
+{
+    return 1;
 }

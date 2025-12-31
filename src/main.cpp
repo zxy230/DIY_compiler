@@ -79,8 +79,6 @@ int main(int argc, char* argv[]) {
         std::string asm_code = generator.generate();
 
         // Output
-        std::cout << ".text\n\n";
-        std::cout << ".globl main\n\n";
         std::cout << asm_code;
 
     } catch (const SemanticError& e) {
