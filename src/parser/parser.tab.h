@@ -87,6 +87,8 @@ extern int yydebug;
     SEMICOLON = 288                /* SEMICOLON  */
   };
   typedef enum yytokentype yytoken_kind_t;
+#include <vector>
+#include <memory>
 #include "ast_node.h"
 #endif
 
@@ -94,7 +96,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 79 "parser.y"
+#line 83 "parser.y"
 
     int num;
     std::string* str;

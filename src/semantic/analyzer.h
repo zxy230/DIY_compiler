@@ -59,6 +59,22 @@ private:
     void analyze_func_body(FuncDef* func) {
         symbol_table_.enter_scope();
 
+        // Register parameters in symbol table (Phase 1)
+        int param_idx = 0;
+        for (auto& param : func->params) {
+            if (param->type == NodeType::Param) {
+                auto p = static_cast<Param*>(param.get());
+                if (symbol_table_.exists_in_current(p->param_name)) {
+                    throw SemanticError("Parameter '" + p->param_name + "' already declared");
+                }
+                Symbol sym(p->param_name, SymbolKind::Parameter, Type(TypeKind::Int));
+                sym.func_index = param_idx;  // Store parameter index
+                sym.offset = 0;  // Will be set by IR builder
+                symbol_table_.declare(sym);
+                param_idx++;
+            }
+        }
+
         // Analyze function body
         analyze_block(func->body.get());
 

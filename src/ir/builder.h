@@ -3,21 +3,26 @@
 
 #include "ast_node.h"
 #include "ir/tac.h"
+#include "ir/cfg.h"
 #include "symbol.h"
 #include <stack>
 #include <unordered_map>
 
-class IRBuilder {
+class IRBuilder
+{
 public:
-    IRBuilder() {
+    IRBuilder()
+    {
         current_func_ = nullptr;
     }
 
-    ProgramIR* build(Program* ast) {
+    ProgramIR *build(Program *ast)
+    {
         program_ir_ = std::make_unique<ProgramIR>();
 
         // Create IR for each function
-        for (auto& func : ast->funcs) {
+        for (auto &func : ast->funcs)
+        {
             auto func_ir = std::make_unique<FunctionIR>();
             func_ir->name = func->func_name;
             func_ir->is_void = (func->return_type == "void");
@@ -25,8 +30,15 @@ public:
         }
 
         // Build IR for each function
-        for (auto& func : ast->funcs) {
+        for (auto &func : ast->funcs)
+        {
             build_function(func.get());
+        }
+
+        // Build CFG and compute liveness for all functions
+        for (auto& func_ir : program_ir_->functions) {
+            func_ir->build_cfg();
+            func_ir->compute_liveness();
         }
 
         return program_ir_.get();
@@ -34,12 +46,37 @@ public:
 
 private:
     std::unique_ptr<ProgramIR> program_ir_;
-    FunctionIR* current_func_ = nullptr;
+    FunctionIR *current_func_ = nullptr;
     std::unordered_map<std::string, int> var_offset_;
-    int next_offset_ = 4;  // Start after ra (4 bytes)
+    int next_offset_ = 4; // Start after ra (4 bytes)
 
-    void build_function(FuncDef* func) {
+    void build_function(FuncDef *func)
+    {
         current_func_ = program_ir_->get_function(func->func_name);
+        var_offset_.clear();
+        next_offset_ = 4; // Start after ra (4 bytes)
+
+        // Process parameters: allocate stack slots and load from a0-a7
+        int param_idx = 0;
+        for (auto &param : func->params)
+        {
+            if (param->type == NodeType::Param)
+            {
+                auto p = static_cast<Param *>(param.get());
+                // Allocate stack slot for parameter
+                var_offset_[p->param_name] = next_offset_;
+                next_offset_ += 4;
+
+                // Generate code to load parameter from argument register
+                // Use special notation: @paramN to indicate it's from aN register
+                std::string result = current_func_->next_temp();
+                std::string arg_reg = "a" + std::to_string(param_idx);
+                emit(TacOp::LOAD_PARAM, result, arg_reg, ""); // New opcode for param load
+                emit(TacOp::STORE, p->param_name, result, "");
+
+                param_idx++;
+            }
+        }
 
         // Process declarations and statements
         build_block(func->body.get());
@@ -47,49 +84,55 @@ private:
         current_func_ = nullptr;
     }
 
-    void build_block(Block* block) {
-        for (auto& stmt : block->stmts) {
+    void build_block(Block *block)
+    {
+        for (auto &stmt : block->stmts)
+        {
             build_stmt(stmt.get());
         }
     }
 
-    void build_stmt(StmtNode* stmt) {
-        switch (stmt->type) {
-            case NodeType::Block:
-                build_block(static_cast<Block*>(stmt));
-                break;
-            case NodeType::DeclStmt:
-                build_decl(static_cast<DeclStmt*>(stmt));
-                break;
-            case NodeType::AssignStmt:
-                build_assign(static_cast<AssignStmt*>(stmt));
-                break;
-            case NodeType::ExprStmt:
-                if (static_cast<ExprStmt*>(stmt)->expr) {
-                    build_expr(static_cast<ExprStmt*>(stmt)->expr.get());
-                }
-                break;
-            case NodeType::IfStmt:
-                build_if(static_cast<IfStmt*>(stmt));
-                break;
-            case NodeType::WhileStmt:
-                build_while(static_cast<WhileStmt*>(stmt));
-                break;
-            case NodeType::ReturnStmt:
-                build_return(static_cast<ReturnStmt*>(stmt));
-                break;
-            case NodeType::BreakStmt:
-                emit(TacOp::JUMP, "", "", "break_end");
-                break;
-            case NodeType::ContinueStmt:
-                emit(TacOp::JUMP, "", "", "continue_start");
-                break;
-            default:
-                break;
+    void build_stmt(StmtNode *stmt)
+    {
+        switch (stmt->type)
+        {
+        case NodeType::Block:
+            build_block(static_cast<Block *>(stmt));
+            break;
+        case NodeType::DeclStmt:
+            build_decl(static_cast<DeclStmt *>(stmt));
+            break;
+        case NodeType::AssignStmt:
+            build_assign(static_cast<AssignStmt *>(stmt));
+            break;
+        case NodeType::ExprStmt:
+            if (static_cast<ExprStmt *>(stmt)->expr)
+            {
+                build_expr(static_cast<ExprStmt *>(stmt)->expr.get());
+            }
+            break;
+        case NodeType::IfStmt:
+            build_if(static_cast<IfStmt *>(stmt));
+            break;
+        case NodeType::WhileStmt:
+            build_while(static_cast<WhileStmt *>(stmt));
+            break;
+        case NodeType::ReturnStmt:
+            build_return(static_cast<ReturnStmt *>(stmt));
+            break;
+        case NodeType::BreakStmt:
+            emit(TacOp::JUMP, "", "", "break_end");
+            break;
+        case NodeType::ContinueStmt:
+            emit(TacOp::JUMP, "", "", "continue_start");
+            break;
+        default:
+            break;
         }
     }
 
-    void build_decl(DeclStmt* stmt) {
+    void build_decl(DeclStmt *stmt)
+    {
         // Assign stack offset
         var_offset_[stmt->var_name] = next_offset_;
         next_offset_ += 4;
@@ -101,12 +144,14 @@ private:
         emit(TacOp::STORE, stmt->var_name, init_val, "");
     }
 
-    void build_assign(AssignStmt* stmt) {
+    void build_assign(AssignStmt *stmt)
+    {
         std::string value = build_expr(stmt->value.get());
         emit(TacOp::STORE, stmt->var_name, value, "");
     }
 
-    void build_if(IfStmt* stmt) {
+    void build_if(IfStmt *stmt)
+    {
         std::string cond = build_expr(stmt->cond.get());
         std::string else_label = current_func_->next_label();
         std::string end_label = current_func_->next_label();
@@ -115,13 +160,15 @@ private:
         build_stmt(stmt->then_stmt.get());
         emit(TacOp::JUMP, "", "", end_label);
         emit(TacOp::LABEL, "", "", else_label);
-        if (stmt->else_stmt) {
+        if (stmt->else_stmt)
+        {
             build_stmt(stmt->else_stmt.get());
         }
         emit(TacOp::LABEL, "", "", end_label);
     }
 
-    void build_while(WhileStmt* stmt) {
+    void build_while(WhileStmt *stmt)
+    {
         std::string loop_start = current_func_->next_label();
         std::string loop_end = current_func_->next_label();
 
@@ -133,86 +180,130 @@ private:
         emit(TacOp::LABEL, "", "", loop_end);
     }
 
-    void build_return(ReturnStmt* stmt) {
-        if (stmt->value) {
+    void build_return(ReturnStmt *stmt)
+    {
+        if (stmt->value)
+        {
             std::string ret_val = build_expr(stmt->value.get());
             emit(TacOp::MOVE, "a0", ret_val, "");
         }
         emit(TacOp::RET, "", "", "");
     }
 
-    std::string build_expr(ExprNode* expr) {
-        switch (expr->type) {
-            case NodeType::BinaryExpr: {
-                auto e = static_cast<BinaryExpr*>(expr);
-                std::string left = build_expr(e->left.get());
-                std::string right = build_expr(e->right.get());
-                std::string result = current_func_->next_temp();
+    std::string build_expr(ExprNode *expr)
+    {
+        switch (expr->type)
+        {
+        case NodeType::BinaryExpr:
+        {
+            auto e = static_cast<BinaryExpr *>(expr);
+            std::string left = build_expr(e->left.get());
+            std::string right = build_expr(e->right.get());
+            std::string result = current_func_->next_temp();
 
-                TacOp op;
-                switch (e->op) {
-                    case OpType::Add: op = TacOp::ADD; break;
-                    case OpType::Sub: op = TacOp::SUB; break;
-                    case OpType::Mul: op = TacOp::MUL; break;
-                    case OpType::Div: op = TacOp::DIV; break;
-                    case OpType::Mod: op = TacOp::MOD; break;
-                    case OpType::Lt:  op = TacOp::LT; break;
-                    case OpType::Gt:  op = TacOp::GT; break;
-                    case OpType::Le:  op = TacOp::LE; break;
-                    case OpType::Ge:  op = TacOp::GE; break;
-                    case OpType::Eq:  op = TacOp::EQ; break;
-                    case OpType::Ne:  op = TacOp::NE; break;
-                    case OpType::And: op = TacOp::AND; break;
-                    case OpType::Or:  op = TacOp::OR; break;
-                    default: op = TacOp::ADD; break;
-                }
-                emit(op, result, left, right);
-                return result;
-            }
-            case NodeType::UnaryExpr: {
-                auto e = static_cast<UnaryExpr*>(expr);
-                std::string operand = build_expr(e->operand.get());
-                std::string result = current_func_->next_temp();
-
-                if (e->op == OpType::Neg) {
-                    emit(TacOp::LOAD_IMM, result, "0", "");
-                    emit(TacOp::SUB, result, result, operand);
-                } else if (e->op == OpType::Not) {
-                    emit(TacOp::NOT, result, operand, "");
-                }
-                return result;
-            }
-            case NodeType::CallExpr: {
-                auto e = static_cast<CallExpr*>(expr);
-                int i = 0;
-                for (auto& arg : e->args) {
-                    std::string arg_val = build_expr(arg.get());
-                    emit(TacOp::PARAM, "a" + std::to_string(i), arg_val, "");
-                    i++;
-                }
-                std::string result = current_func_->next_temp();
-                emit(TacOp::CALL, result, e->func_name, "");
-                return result;
-            }
-            case NodeType::VarExpr: {
-                auto e = static_cast<VarExpr*>(expr);
-                std::string result = current_func_->next_temp();
-                emit(TacOp::LOAD, result, e->var_name, "");
-                return result;
-            }
-            case NodeType::ConstExpr: {
-                auto e = static_cast<ConstExpr*>(expr);
-                std::string result = current_func_->next_temp();
-                emit(TacOp::LOAD_IMM, result, std::to_string(e->const_value), "");
-                return result;
-            }
+            TacOp op;
+            switch (e->op)
+            {
+            case OpType::Add:
+                op = TacOp::ADD;
+                break;
+            case OpType::Sub:
+                op = TacOp::SUB;
+                break;
+            case OpType::Mul:
+                op = TacOp::MUL;
+                break;
+            case OpType::Div:
+                op = TacOp::DIV;
+                break;
+            case OpType::Mod:
+                op = TacOp::MOD;
+                break;
+            case OpType::Lt:
+                op = TacOp::LT;
+                break;
+            case OpType::Gt:
+                op = TacOp::GT;
+                break;
+            case OpType::Le:
+                op = TacOp::LE;
+                break;
+            case OpType::Ge:
+                op = TacOp::GE;
+                break;
+            case OpType::Eq:
+                op = TacOp::EQ;
+                break;
+            case OpType::Ne:
+                op = TacOp::NE;
+                break;
+            case OpType::And:
+                op = TacOp::AND;
+                break;
+            case OpType::Or:
+                op = TacOp::OR;
+                break;
             default:
-                return "0";
+                op = TacOp::ADD;
+                break;
+            }
+            emit(op, result, left, right);
+            return result;
+        }
+        case NodeType::UnaryExpr:
+        {
+            auto e = static_cast<UnaryExpr *>(expr);
+            std::string operand = build_expr(e->operand.get());
+            std::string result = current_func_->next_temp();
+
+            if (e->op == OpType::Neg)
+            {
+                emit(TacOp::LOAD_IMM, result, "0", "");
+                emit(TacOp::SUB, result, result, operand);
+            }
+            else if (e->op == OpType::Not)
+            {
+                emit(TacOp::NOT, result, operand, "");
+            }
+            return result;
+        }
+        case NodeType::CallExpr:
+        {
+            auto e = static_cast<CallExpr *>(expr);
+            int i = 0;
+            for (auto &arg : e->args)
+            {
+                std::string arg_val = build_expr(arg.get());
+                emit(TacOp::PARAM, "a" + std::to_string(i), arg_val, "");
+                i++;
+            }
+            std::string result = current_func_->next_temp();
+            emit(TacOp::CALL, result, e->func_name, "");
+            return result;
+        }
+        case NodeType::VarExpr:
+        {
+            auto e = static_cast<VarExpr *>(expr);
+            std::string result = current_func_->next_temp();
+            emit(TacOp::LOAD, result, e->var_name, "");
+            return result;
+        }
+        case NodeType::ConstExpr:
+        {
+            auto e = static_cast<ConstExpr *>(expr);
+            std::string result = current_func_->next_temp();
+            emit(TacOp::LOAD_IMM, result, std::to_string(e->const_value), "");
+            return result;
+        }
+        default:
+            return "0";
         }
     }
 
-    void emit(TacOp op, const std::string& dest, const std::string& src1, const std::string& src2) {
-        if (current_func_) {
+    void emit(TacOp op, const std::string &dest, const std::string &src1, const std::string &src2)
+    {
+        if (current_func_)
+        {
             current_func_->instrs.emplace_back(op, dest, src1, src2);
         }
     }

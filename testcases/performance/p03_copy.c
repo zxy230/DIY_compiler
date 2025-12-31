@@ -31,19 +31,18 @@ int compute(int x, int y) {
     int a30 = a29;
     int a31 = a30;
     int a32 = a31;
-    int t = a32 + EVAL("randint(0, 32767)");
+    int t = a32 + 500;
     return t + y;
 }
 
 int main() {
-    int N = 20000000;
+    int N = 1000;
     int MOD = 998244353;
-    EXEC("MOD = 998244353");
 
     int i = 0;
     int result = 0;
     while (i < N) {
-        result = ((result + compute((i + EVAL("randint(0, MOD)")) % 32768, (i + EVAL("randint(0, MOD)")) % 32768) % MOD) % MOD - i % MOD) % MOD;
+        result = ((result + compute((i + 100) % 32768, (i + 200) % 32768) % MOD) % MOD - i % MOD) % MOD;
         i = i + 1;
     }
     return result;

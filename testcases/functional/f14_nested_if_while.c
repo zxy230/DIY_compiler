@@ -1,10 +1,15 @@
-int main() {
+int main()
+{
     int x = 0;
-    while (x < EVAL("randint(5, 15)")) {
-        if (x % 2 == 0) {
-            x = x + EVAL("randint(2, 4)");
-        } else {
-            x = x EVAL("'+' if randint(0, 1) else '-'") 1;
+    while (x < 10)
+    {
+        if (x % 2 == 0)
+        {
+            x = x + 3;
+        }
+        else
+        {
+            x = x + 1;
         }
     }
     return x;

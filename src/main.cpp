@@ -13,6 +13,7 @@
 #include "semantic/symbol.h"
 #include "semantic/analyzer.h"
 #include "ir/builder.h"
+#include "optimizer/optimizer.h"
 #include "codegen/riscv32.h"
 
 // External declarations
@@ -73,6 +74,22 @@ int main(int argc, char* argv[]) {
         // IR generation
         IRBuilder ir_builder;
         ProgramIR* ir = ir_builder.build(ast_root.get());
+
+        // Run optimizations if enabled
+        if (opt_enabled) {
+            std::cerr << "\n=== Running optimizations ===\n";
+            Optimizer::optimize(ir);
+        }
+
+        // Debug: Print TAC
+        std::cerr << "\n=== TAC ===\n";
+        for (auto& func : ir->functions) {
+            std::cerr << "Function: " << func->name << "\n";
+            for (auto& instr : func->instrs) {
+                std::cerr << "  " << instr.to_string() << "\n";
+            }
+            std::cerr << "\n";
+        }
 
         // Code generation
         RISC32Generator generator(ir);

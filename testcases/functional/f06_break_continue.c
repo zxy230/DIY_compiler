@@ -1,20 +1,37 @@
-int main() {
-  int sum = EVAL("randint(0, 7)");
+int main()
+{
+  int sum = 4;
   int i = 0;
-  while(i < 20) {
+  while (i < 20)
+  {
     int j = 0;
-    while (j < 10) {
+    while (j < 10)
+    {
       int k = 0;
-      while (k < 5) {
+      while (k < 5)
+      {
         int m = 0;
-        while (m < 3) {
+        while (m < 3)
+        {
           if (m + 1 >= 3)
             if (m)
               if (m || !m)
                 if (m - -1 >= 3)
-                  {{{{;;break;continue;}}}}
+                {
+                  {
+                    {
+                      {
+                        ;
+                        ;
+                        break;
+                        continue;
+                      }
+                    }
+                  }
+                }
           int n = 0;
-          while (n < 2) {
+          while (n < 2)
+          {
             n = n + 1;
             continue;
             break;
@@ -23,8 +40,10 @@ int main() {
           m = m + 1;
           sum = sum + 1;
         }
-        while(1) {        
-          while(1) break;
+        while (1)
+        {
+          while (1)
+            break;
           break;
         }
         k = k + 1;

@@ -1,178 +1,184 @@
-int abs(int x) {
-    if (x < 0) {
+int abs(int x)
+{
+    if (x < 0)
+    {
         return -x;
-    } else {
+    }
+    else
+    {
         return x;
     }
 }
 
-int compute(int a, int b, int c, int d, int e, int f, int g, int h) {
-    return a EVAL("'+' if randint(0, 1) else '-'") b * c EVAL("'+' if randint(0, 1) else '-'") d / (abs(e) + 1) EVAL("'+' if randint(0, 1) else '-'") f % (abs(g) + 1) * h;
+int compute(int a, int b, int c, int d, int e, int f, int g, int h)
+{
+    return a + b * c - d / (abs(e) + 1) + f % (abs(g) + 1) * h;
 }
 
-int main() {
-    int v1 = EVAL("randint(0, 1023)");
-    int v2 = EVAL("randint(0, 1023)");
-    int v3 = EVAL("randint(0, 1023)");
-    int v4 = EVAL("randint(0, 1023)");
-    int v5 = EVAL("randint(0, 1023)");
-    int v6 = EVAL("randint(0, 1023)");
-    int v7 = EVAL("randint(0, 1023)");
-    int v8 = EVAL("randint(0, 1023)");
-    int v9 = EVAL("randint(0, 1023)");
-    int v10 = EVAL("randint(0, 1023)");
-    int v11 = EVAL("randint(0, 1023)");
-    int v12 = EVAL("randint(0, 1023)");
-    int v13 = EVAL("randint(0, 1023)");
-    int v14 = EVAL("randint(0, 1023)");
-    int v15 = EVAL("randint(0, 1023)");
-    int v16 = EVAL("randint(0, 1023)");
-    int v17 = EVAL("randint(0, 1023)");
-    int v18 = EVAL("randint(0, 1023)");
-    int v19 = EVAL("randint(0, 1023)");
-    int v20 = EVAL("randint(0, 1023)");
-    int v21 = EVAL("randint(0, 1023)");
-    int v22 = EVAL("randint(0, 1023)");
-    int v23 = EVAL("randint(0, 1023)");
-    int v24 = EVAL("randint(0, 1023)");
-    int v25 = EVAL("randint(0, 1023)");
-    int v26 = EVAL("randint(0, 1023)");
-    int v27 = EVAL("randint(0, 1023)");
-    int v28 = EVAL("randint(0, 1023)");
-    int v29 = EVAL("randint(0, 1023)");
-    int v30 = EVAL("randint(0, 1023)");
-    int v31 = EVAL("randint(0, 1023)");
-    int v32 = EVAL("randint(0, 1023)");
+int main()
+{
+    int v1 = 100;
+    int v2 = 200;
+    int v3 = 300;
+    int v4 = 400;
+    int v5 = 500;
+    int v6 = 600;
+    int v7 = 700;
+    int v8 = 800;
+    int v9 = 150;
+    int v10 = 250;
+    int v11 = 350;
+    int v12 = 450;
+    int v13 = 550;
+    int v14 = 650;
+    int v15 = 750;
+    int v16 = 850;
+    int v17 = 120;
+    int v18 = 220;
+    int v19 = 320;
+    int v20 = 420;
+    int v21 = 520;
+    int v22 = 620;
+    int v23 = 720;
+    int v24 = 820;
+    int v25 = 180;
+    int v26 = 280;
+    int v27 = 380;
+    int v28 = 480;
+    int v29 = 580;
+    int v30 = 680;
+    int v31 = 780;
+    int v32 = 880;
 
-    int sum1 = v1 EVAL("'+' if randint(0, 1) else '-'") v2 EVAL("'+' if randint(0, 1) else '-'") v3 EVAL("'+' if randint(0, 1) else '-'") v4 EVAL("'+' if randint(0, 1) else '-'") v5 EVAL("'+' if randint(0, 1) else '-'") v6 EVAL("'+' if randint(0, 1) else '-'") v7 EVAL("'+' if randint(0, 1) else '-'") v8;
-    int sum2 = v9 EVAL("'+' if randint(0, 1) else '-'") v10 EVAL("'+' if randint(0, 1) else '-'") v11 EVAL("'+' if randint(0, 1) else '-'") v12 EVAL("'+' if randint(0, 1) else '-'") v13 EVAL("'+' if randint(0, 1) else '-'") v14 EVAL("'+' if randint(0, 1) else '-'") v15 EVAL("'+' if randint(0, 1) else '-'") v16;
-    int sum3 = v17 EVAL("'+' if randint(0, 1) else '-'") v18 EVAL("'+' if randint(0, 1) else '-'") v19 EVAL("'+' if randint(0, 1) else '-'") v20 EVAL("'+' if randint(0, 1) else '-'") v21 EVAL("'+' if randint(0, 1) else '-'") v22 EVAL("'+' if randint(0, 1) else '-'") v23 EVAL("'+' if randint(0, 1) else '-'") v24;
-    int sum4 = v25 EVAL("'+' if randint(0, 1) else '-'") v26 EVAL("'+' if randint(0, 1) else '-'") v27 EVAL("'+' if randint(0, 1) else '-'") v28 EVAL("'+' if randint(0, 1) else '-'") v29 EVAL("'+' if randint(0, 1) else '-'") v30 EVAL("'+' if randint(0, 1) else '-'") v31 EVAL("'+' if randint(0, 1) else '-'") v32;
+    int sum1 = v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8;
+    int sum2 = v9 + v10 + v11 + v12 + v13 + v14 + v15 + v16;
+    int sum3 = v17 + v18 + v19 + v20 + v21 + v22 + v23 + v24;
+    int sum4 = v25 + v26 + v27 + v28 + v29 + v30 + v31 + v32;
 
-    int result1 = sum1 EVAL("'+' if randint(0, 1) else '-'") sum2 EVAL("'+' if randint(0, 1) else '-'") sum3 EVAL("'+' if randint(0, 1) else '-'") sum4;
+    int result1 = sum1 + sum2 + sum3 + sum4;
 
     {
-        int u1 = v1 + EVAL("randint(0, 1023)");
-        int u2 = v2 + EVAL("randint(0, 1023)");
-        int u3 = v3 + EVAL("randint(0, 1023)");
-        int u4 = v4 + EVAL("randint(0, 1023)");
-        int u5 = v5 + EVAL("randint(0, 1023)");
-        int u6 = v6 + EVAL("randint(0, 1023)");
-        int u7 = v7 + EVAL("randint(0, 1023)");
-        int u8 = v8 + EVAL("randint(0, 1023)");
-        int u9 = v9 + EVAL("randint(0, 1023)");
-        int u10 = v10 + EVAL("randint(0, 1023)");
-        int u11 = v11 + EVAL("randint(0, 1023)");
-        int u12 = v12 + EVAL("randint(0, 1023)");
-        int u13 = v13 + EVAL("randint(0, 1023)");
-        int u14 = v14 + EVAL("randint(0, 1023)");
-        int u15 = v15 + EVAL("randint(0, 1023)");
-        int u16 = v16 + EVAL("randint(0, 1023)");
-        int u17 = v17 + EVAL("randint(0, 1023)");
-        int u18 = v18 + EVAL("randint(0, 1023)");
-        int u19 = v19 + EVAL("randint(0, 1023)");
-        int u20 = v20 + EVAL("randint(0, 1023)");
-        int u21 = v21 + EVAL("randint(0, 1023)");
-        int u22 = v22 + EVAL("randint(0, 1023)");
-        int u23 = v23 + EVAL("randint(0, 1023)");
-        int u24 = v24 + EVAL("randint(0, 1023)");
-        int u25 = v25 + EVAL("randint(0, 1023)");
-        int u26 = v26 + EVAL("randint(0, 1023)");
-        int u27 = v27 + EVAL("randint(0, 1023)");
-        int u28 = v28 + EVAL("randint(0, 1023)");
-        int u29 = v29 + EVAL("randint(0, 1023)");
-        int u30 = v30 + EVAL("randint(0, 1023)");
-        int u31 = v31 + EVAL("randint(0, 1023)");
-        int u32 = v32 + EVAL("randint(0, 1023)");
+        int u1 = v1 + 100;
+        int u2 = v2 + 200;
+        int u3 = v3 + 300;
+        int u4 = v4 + 400;
+        int u5 = v5 + 500;
+        int u6 = v6 + 600;
+        int u7 = v7 + 700;
+        int u8 = v8 + 800;
+        int u9 = v9 + 100;
+        int u10 = v10 + 200;
+        int u11 = v11 + 300;
+        int u12 = v12 + 400;
+        int u13 = v13 + 500;
+        int u14 = v14 + 600;
+        int u15 = v15 + 700;
+        int u16 = v16 + 800;
+        int u17 = v17 + 100;
+        int u18 = v18 + 200;
+        int u19 = v19 + 300;
+        int u20 = v20 + 400;
+        int u21 = v21 + 500;
+        int u22 = v22 + 600;
+        int u23 = v23 + 700;
+        int u24 = v24 + 800;
+        int u25 = v25 + 100;
+        int u26 = v26 + 200;
+        int u27 = v27 + 300;
+        int u28 = v28 + 400;
+        int u29 = v29 + 500;
+        int u30 = v30 + 600;
+        int u31 = v31 + 700;
+        int u32 = v32 + 800;
 
-        int sum5 = u1 EVAL("'+' if randint(0, 1) else '-'") u2 EVAL("'+' if randint(0, 1) else '-'") u3 EVAL("'+' if randint(0, 1) else '-'") u4 EVAL("'+' if randint(0, 1) else '-'") u5 EVAL("'+' if randint(0, 1) else '-'") u6 EVAL("'+' if randint(0, 1) else '-'") u7 EVAL("'+' if randint(0, 1) else '-'") u8;
-        int sum6 = u9 EVAL("'+' if randint(0, 1) else '-'") u10 EVAL("'+' if randint(0, 1) else '-'") u11 EVAL("'+' if randint(0, 1) else '-'") u12 EVAL("'+' if randint(0, 1) else '-'") u13 EVAL("'+' if randint(0, 1) else '-'") u14 EVAL("'+' if randint(0, 1) else '-'") u15 EVAL("'+' if randint(0, 1) else '-'") u16;
-        int sum7 = u17 EVAL("'+' if randint(0, 1) else '-'") u18 EVAL("'+' if randint(0, 1) else '-'") u19 EVAL("'+' if randint(0, 1) else '-'") u20 EVAL("'+' if randint(0, 1) else '-'") u21 EVAL("'+' if randint(0, 1) else '-'") u22 EVAL("'+' if randint(0, 1) else '-'") u23 EVAL("'+' if randint(0, 1) else '-'") u24;
-        int sum8 = u25 EVAL("'+' if randint(0, 1) else '-'") u26 EVAL("'+' if randint(0, 1) else '-'") u27 EVAL("'+' if randint(0, 1) else '-'") u28 EVAL("'+' if randint(0, 1) else '-'") u29 EVAL("'+' if randint(0, 1) else '-'") u30 EVAL("'+' if randint(0, 1) else '-'") u31 EVAL("'+' if randint(0, 1) else '-'") u32;
+        int sum5 = u1 + u2 + u3 + u4 + u5 + u6 + u7 + u8;
+        int sum6 = u9 + u10 + u11 + u12 + u13 + u14 + u15 + u16;
+        int sum7 = u17 + u18 + u19 + u20 + u21 + u22 + u23 + u24;
+        int sum8 = u25 + u26 + u27 + u28 + u29 + u30 + u31 + u32;
 
-        int result2 = sum5 EVAL("'+' if randint(0, 1) else '-'") sum6 EVAL("'+' if randint(0, 1) else '-'") sum7 EVAL("'+' if randint(0, 1) else '-'") sum8;
+        int result2 = sum5 + sum6 + sum7 + sum8;
 
         {
-            int w1 = u1 EVAL("'+' if randint(0, 1) else '-'") v1;
-            int w2 = u2 EVAL("'+' if randint(0, 1) else '-'") v2;
-            int w3 = u3 EVAL("'+' if randint(0, 1) else '-'") v3;
-            int w4 = u4 EVAL("'+' if randint(0, 1) else '-'") v4;
-            int w5 = u5 EVAL("'+' if randint(0, 1) else '-'") v5;
-            int w6 = u6 EVAL("'+' if randint(0, 1) else '-'") v6;
-            int w7 = u7 EVAL("'+' if randint(0, 1) else '-'") v7;
-            int w8 = u8 EVAL("'+' if randint(0, 1) else '-'") v8;
-            int w9 = u9 EVAL("'+' if randint(0, 1) else '-'") v9;
-            int w10 = u10 EVAL("'+' if randint(0, 1) else '-'") v10;
-            int w11 = u11 EVAL("'+' if randint(0, 1) else '-'") v11;
-            int w12 = u12 EVAL("'+' if randint(0, 1) else '-'") v12;
-            int w13 = u13 EVAL("'+' if randint(0, 1) else '-'") v13;
-            int w14 = u14 EVAL("'+' if randint(0, 1) else '-'") v14;
-            int w15 = u15 EVAL("'+' if randint(0, 1) else '-'") v15;
-            int w16 = u16 EVAL("'+' if randint(0, 1) else '-'") v16;
-            int w17 = u17 EVAL("'+' if randint(0, 1) else '-'") v17;
-            int w18 = u18 EVAL("'+' if randint(0, 1) else '-'") v18;
-            int w19 = u19 EVAL("'+' if randint(0, 1) else '-'") v19;
-            int w20 = u20 EVAL("'+' if randint(0, 1) else '-'") v20;
-            int w21 = u21 EVAL("'+' if randint(0, 1) else '-'") v21;
-            int w22 = u22 EVAL("'+' if randint(0, 1) else '-'") v22;
-            int w23 = u23 EVAL("'+' if randint(0, 1) else '-'") v23;
-            int w24 = u24 EVAL("'+' if randint(0, 1) else '-'") v24;
-            int w25 = u25 EVAL("'+' if randint(0, 1) else '-'") v25;
-            int w26 = u26 EVAL("'+' if randint(0, 1) else '-'") v26;
-            int w27 = u27 EVAL("'+' if randint(0, 1) else '-'") v27;
-            int w28 = u28 EVAL("'+' if randint(0, 1) else '-'") v28;
-            int w29 = u29 EVAL("'+' if randint(0, 1) else '-'") v29;
-            int w30 = u30 EVAL("'+' if randint(0, 1) else '-'") v30;
-            int w31 = u31 EVAL("'+' if randint(0, 1) else '-'") v31;
-            int w32 = u32 EVAL("'+' if randint(0, 1) else '-'") v32;
+            int w1 = u1 + v1;
+            int w2 = u2 + v2;
+            int w3 = u3 + v3;
+            int w4 = u4 + v4;
+            int w5 = u5 + v5;
+            int w6 = u6 + v6;
+            int w7 = u7 + v7;
+            int w8 = u8 + v8;
+            int w9 = u9 + v9;
+            int w10 = u10 + v10;
+            int w11 = u11 + v11;
+            int w12 = u12 + v12;
+            int w13 = u13 + v13;
+            int w14 = u14 + v14;
+            int w15 = u15 + v15;
+            int w16 = u16 + v16;
+            int w17 = u17 + v17;
+            int w18 = u18 + v18;
+            int w19 = u19 + v19;
+            int w20 = u20 + v20;
+            int w21 = u21 + v21;
+            int w22 = u22 + v22;
+            int w23 = u23 + v23;
+            int w24 = u24 + v24;
+            int w25 = u25 + v25;
+            int w26 = u26 + v26;
+            int w27 = u27 + v27;
+            int w28 = u28 + v28;
+            int w29 = u29 + v29;
+            int w30 = u30 + v30;
+            int w31 = u31 + v31;
+            int w32 = u32 + v32;
 
-            int sum9 = w1 EVAL("'+' if randint(0, 1) else '-'") w2 EVAL("'+' if randint(0, 1) else '-'") w3 EVAL("'+' if randint(0, 1) else '-'") w4 EVAL("'+' if randint(0, 1) else '-'") w5 EVAL("'+' if randint(0, 1) else '-'") w6 EVAL("'+' if randint(0, 1) else '-'") w7 EVAL("'+' if randint(0, 1) else '-'") w8;
-            int sum10 = w9 EVAL("'+' if randint(0, 1) else '-'") w10 EVAL("'+' if randint(0, 1) else '-'") w11 EVAL("'+' if randint(0, 1) else '-'") w12 EVAL("'+' if randint(0, 1) else '-'") w13 EVAL("'+' if randint(0, 1) else '-'") w14 EVAL("'+' if randint(0, 1) else '-'") w15 EVAL("'+' if randint(0, 1) else '-'") w16;
-            int sum11 = w17 EVAL("'+' if randint(0, 1) else '-'") w18 EVAL("'+' if randint(0, 1) else '-'") w19 EVAL("'+' if randint(0, 1) else '-'") w20 EVAL("'+' if randint(0, 1) else '-'") w21 EVAL("'+' if randint(0, 1) else '-'") w22 EVAL("'+' if randint(0, 1) else '-'") w23 EVAL("'+' if randint(0, 1) else '-'") w24;
-            int sum12 = w25 EVAL("'+' if randint(0, 1) else '-'") w26 EVAL("'+' if randint(0, 1) else '-'") w27 EVAL("'+' if randint(0, 1) else '-'") w28 EVAL("'+' if randint(0, 1) else '-'") w29 EVAL("'+' if randint(0, 1) else '-'") w30 EVAL("'+' if randint(0, 1) else '-'") w31 EVAL("'+' if randint(0, 1) else '-'") w32;
+            int sum9 = w1 + w2 + w3 + w4 + w5 + w6 + w7 + w8;
+            int sum10 = w9 + w10 + w11 + w12 + w13 + w14 + w15 + w16;
+            int sum11 = w17 + w18 + w19 + w20 + w21 + w22 + w23 + w24;
+            int sum12 = w25 + w26 + w27 + w28 + w29 + w30 + w31 + w32;
 
-            int result3 = sum9 EVAL("'+' if randint(0, 1) else '-'") sum10 EVAL("'+' if randint(0, 1) else '-'") sum11 EVAL("'+' if randint(0, 1) else '-'") sum12;
+            int result3 = sum9 + sum10 + sum11 + sum12;
 
             {
-                int x1 = w1 - EVAL("randint(0, 1023)");
-                int x2 = w2 - EVAL("randint(0, 1023)");
-                int x3 = w3 - EVAL("randint(0, 1023)");
-                int x4 = w4 - EVAL("randint(0, 1023)");
-                int x5 = w5 - EVAL("randint(0, 1023)");
-                int x6 = w6 - EVAL("randint(0, 1023)");
-                int x7 = w7 - EVAL("randint(0, 1023)");
-                int x8 = w8 - EVAL("randint(0, 1023)");
-                int x9 = w9 - EVAL("randint(0, 1023)");
-                int x10 = w10 - EVAL("randint(0, 1023)");
-                int x11 = w11 - EVAL("randint(0, 1023)");
-                int x12 = w12 - EVAL("randint(0, 1023)");
-                int x13 = w13 - EVAL("randint(0, 1023)");
-                int x14 = w14 - EVAL("randint(0, 1023)");
-                int x15 = w15 - EVAL("randint(0, 1023)");
-                int x16 = w16 - EVAL("randint(0, 1023)");
-                int x17 = w17 - EVAL("randint(0, 1023)");
-                int x18 = w18 - EVAL("randint(0, 1023)");
-                int x19 = w19 - EVAL("randint(0, 1023)");
-                int x20 = w20 - EVAL("randint(0, 1023)");
-                int x21 = w21 - EVAL("randint(0, 1023)");
-                int x22 = w22 - EVAL("randint(0, 1023)");
-                int x23 = w23 - EVAL("randint(0, 1023)");
-                int x24 = w24 - EVAL("randint(0, 1023)");
-                int x25 = w25 - EVAL("randint(0, 1023)");
-                int x26 = w26 - EVAL("randint(0, 1023)");
-                int x27 = w27 - EVAL("randint(0, 1023)");
-                int x28 = w28 - EVAL("randint(0, 1023)");
-                int x29 = w29 - EVAL("randint(0, 1023)");
-                int x30 = w30 - EVAL("randint(0, 1023)");
-                int x31 = w31 - EVAL("randint(0, 1023)");
-                int x32 = w32 - EVAL("randint(0, 1023)");
+                int x1 = w1 - 100;
+                int x2 = w2 - 200;
+                int x3 = w3 - 300;
+                int x4 = w4 - 400;
+                int x5 = w5 - 500;
+                int x6 = w6 - 600;
+                int x7 = w7 - 700;
+                int x8 = w8 - 800;
+                int x9 = w9 - 100;
+                int x10 = w10 - 200;
+                int x11 = w11 - 300;
+                int x12 = w12 - 400;
+                int x13 = w13 - 500;
+                int x14 = w14 - 600;
+                int x15 = w15 - 700;
+                int x16 = w16 - 800;
+                int x17 = w17 - 100;
+                int x18 = w18 - 200;
+                int x19 = w19 - 300;
+                int x20 = w20 - 400;
+                int x21 = w21 - 500;
+                int x22 = w22 - 600;
+                int x23 = w23 - 700;
+                int x24 = w24 - 800;
+                int x25 = w25 - 100;
+                int x26 = w26 - 200;
+                int x27 = w27 - 300;
+                int x28 = w28 - 400;
+                int x29 = w29 - 500;
+                int x30 = w30 - 600;
+                int x31 = w31 - 700;
+                int x32 = w32 - 800;
 
-                int sum13 = x1 EVAL("'+' if randint(0, 1) else '-'") x2 EVAL("'+' if randint(0, 1) else '-'") x3 EVAL("'+' if randint(0, 1) else '-'") x4 EVAL("'+' if randint(0, 1) else '-'") x5 EVAL("'+' if randint(0, 1) else '-'") x6 EVAL("'+' if randint(0, 1) else '-'") x7 EVAL("'+' if randint(0, 1) else '-'") x8;
-                int sum14 = x9 EVAL("'+' if randint(0, 1) else '-'") x10 EVAL("'+' if randint(0, 1) else '-'") x11 EVAL("'+' if randint(0, 1) else '-'") x12 EVAL("'+' if randint(0, 1) else '-'") x13 EVAL("'+' if randint(0, 1) else '-'") x14 EVAL("'+' if randint(0, 1) else '-'") x15 EVAL("'+' if randint(0, 1) else '-'") x16;
-                int sum15 = x17 EVAL("'+' if randint(0, 1) else '-'") x18 EVAL("'+' if randint(0, 1) else '-'") x19 EVAL("'+' if randint(0, 1) else '-'") x20 EVAL("'+' if randint(0, 1) else '-'") x21 EVAL("'+' if randint(0, 1) else '-'") x22 EVAL("'+' if randint(0, 1) else '-'") x23 EVAL("'+' if randint(0, 1) else '-'") x24;
-                int sum16 = x25 EVAL("'+' if randint(0, 1) else '-'") x26 EVAL("'+' if randint(0, 1) else '-'") x27 EVAL("'+' if randint(0, 1) else '-'") x28 EVAL("'+' if randint(0, 1) else '-'") x29 EVAL("'+' if randint(0, 1) else '-'") x30 EVAL("'+' if randint(0, 1) else '-'") x31 EVAL("'+' if randint(0, 1) else '-'") x32;
+                int sum13 = x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8;
+                int sum14 = x9 + x10 + x11 + x12 + x13 + x14 + x15 + x16;
+                int sum15 = x17 + x18 + x19 + x20 + x21 + x22 + x23 + x24;
+                int sum16 = x25 + x26 + x27 + x28 + x29 + x30 + x31 + x32;
 
-                int result4 = sum13 EVAL("'+' if randint(0, 1) else '-'") sum14 EVAL("'+' if randint(0, 1) else '-'") sum15 EVAL("'+' if randint(0, 1) else '-'") sum16;
+                int result4 = sum13 + sum14 + sum15 + sum16;
 
                 int final_result = compute(result1, result2, result3, result4,
                                            sum1, sum5, sum9, sum13);

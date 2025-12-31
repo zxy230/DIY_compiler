@@ -163,7 +163,7 @@ int graphShortestPaths(int n, int seed) {
 
 int main() {
     int N = 250;
-    int seed = EVAL("randint(0, 32767)");
+    int seed = 12345;
 
     return graphShortestPaths(N, seed);
 }

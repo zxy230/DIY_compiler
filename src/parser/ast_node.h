@@ -11,7 +11,8 @@ class ExprNode;
 class StmtNode;
 
 // Base node types
-enum class NodeType {
+enum class NodeType
+{
     Program,
     FuncDef,
     Block,
@@ -32,14 +33,28 @@ enum class NodeType {
 };
 
 // Operator types
-enum class OpType {
-    Add, Sub, Mul, Div, Mod,
-    Lt, Gt, Le, Ge, Eq, Ne,
-    And, Or,
-    Neg, Pos, Not
+enum class OpType
+{
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+    Eq,
+    Ne,
+    And,
+    Or,
+    Neg,
+    Pos,
+    Not
 };
 
-class ASTNode {
+class ASTNode
+{
 public:
     NodeType type;
     int line_no;
@@ -47,22 +62,25 @@ public:
     virtual ~ASTNode() = default;
 };
 
-class ExprNode : public ASTNode {
+class ExprNode : public ASTNode
+{
 public:
-    std::string value_name;  // For code generation
+    std::string value_name; // For code generation
     bool is_constant;
     int const_value;
 
     ExprNode(NodeType t) : ASTNode(t), is_constant(false), const_value(0) {}
 };
 
-class StmtNode : public ASTNode {
+class StmtNode : public ASTNode
+{
 public:
     StmtNode(NodeType t) : ASTNode(t) {}
 };
 
 // Expression nodes
-class BinaryExpr : public ExprNode {
+class BinaryExpr : public ExprNode
+{
 public:
     OpType op;
     std::unique_ptr<ExprNode> left;
@@ -72,7 +90,8 @@ public:
         : ExprNode(NodeType::BinaryExpr), op(oper), left(std::move(l)), right(std::move(r)) {}
 };
 
-class UnaryExpr : public ExprNode {
+class UnaryExpr : public ExprNode
+{
 public:
     OpType op;
     std::unique_ptr<ExprNode> operand;
@@ -81,66 +100,75 @@ public:
         : ExprNode(NodeType::UnaryExpr), op(oper), operand(std::move(opnd)) {}
 };
 
-class CallExpr : public ExprNode {
+class CallExpr : public ExprNode
+{
 public:
     std::string func_name;
     std::vector<std::unique_ptr<ExprNode>> args;
 
-    CallExpr(const std::string& name) : ExprNode(NodeType::CallExpr), func_name(name) {}
+    CallExpr(const std::string &name) : ExprNode(NodeType::CallExpr), func_name(name) {}
 };
 
-class VarExpr : public ExprNode {
+class VarExpr : public ExprNode
+{
 public:
     std::string var_name;
 
-    VarExpr(const std::string& name) : ExprNode(NodeType::VarExpr), var_name(name) {}
+    VarExpr(const std::string &name) : ExprNode(NodeType::VarExpr), var_name(name) {}
 };
 
-class ConstExpr : public ExprNode {
+class ConstExpr : public ExprNode
+{
 public:
-    ConstExpr(int val) : ExprNode(NodeType::ConstExpr) {
+    ConstExpr(int val) : ExprNode(NodeType::ConstExpr)
+    {
         is_constant = true;
         const_value = val;
     }
 };
 
 // Statement nodes
-class DeclStmt : public StmtNode {
+class DeclStmt : public StmtNode
+{
 public:
     std::string var_name;
     std::unique_ptr<ExprNode> init_expr;
 
-    DeclStmt(const std::string& name, std::unique_ptr<ExprNode> init)
+    DeclStmt(const std::string &name, std::unique_ptr<ExprNode> init)
         : StmtNode(NodeType::DeclStmt), var_name(name), init_expr(std::move(init)) {}
 };
 
-class AssignStmt : public StmtNode {
+class AssignStmt : public StmtNode
+{
 public:
     std::string var_name;
     std::unique_ptr<ExprNode> value;
 
-    AssignStmt(const std::string& name, std::unique_ptr<ExprNode> val)
+    AssignStmt(const std::string &name, std::unique_ptr<ExprNode> val)
         : StmtNode(NodeType::AssignStmt), var_name(name), value(std::move(val)) {}
 };
 
-class ExprStmt : public StmtNode {
+class ExprStmt : public StmtNode
+{
 public:
     std::unique_ptr<ExprNode> expr;
 
     ExprStmt(std::unique_ptr<ExprNode> e) : StmtNode(NodeType::ExprStmt), expr(std::move(e)) {}
 };
 
-class IfStmt : public StmtNode {
+class IfStmt : public StmtNode
+{
 public:
     std::unique_ptr<ExprNode> cond;
     std::unique_ptr<StmtNode> then_stmt;
-    std::unique_ptr<StmtNode> else_stmt;  // May be nullptr
+    std::unique_ptr<StmtNode> else_stmt; // May be nullptr
 
     IfStmt(std::unique_ptr<ExprNode> c, std::unique_ptr<StmtNode> t, std::unique_ptr<StmtNode> e = nullptr)
         : StmtNode(NodeType::IfStmt), cond(std::move(c)), then_stmt(std::move(t)), else_stmt(std::move(e)) {}
 };
 
-class WhileStmt : public StmtNode {
+class WhileStmt : public StmtNode
+{
 public:
     std::unique_ptr<ExprNode> cond;
     std::unique_ptr<StmtNode> body;
@@ -149,42 +177,59 @@ public:
         : StmtNode(NodeType::WhileStmt), cond(std::move(c)), body(std::move(b)) {}
 };
 
-class ReturnStmt : public StmtNode {
+class ReturnStmt : public StmtNode
+{
 public:
-    std::unique_ptr<ExprNode> value;  // nullptr for void return
+    std::unique_ptr<ExprNode> value; // nullptr for void return
 
     ReturnStmt(std::unique_ptr<ExprNode> v = nullptr) : StmtNode(NodeType::ReturnStmt), value(std::move(v)) {}
 };
 
-class BreakStmt : public StmtNode {
+class BreakStmt : public StmtNode
+{
 public:
     BreakStmt() : StmtNode(NodeType::BreakStmt) {}
 };
 
-class ContinueStmt : public StmtNode {
+class ContinueStmt : public StmtNode
+{
 public:
     ContinueStmt() : StmtNode(NodeType::ContinueStmt) {}
 };
 
-class Block : public StmtNode {
+// Parameter node (Phase 1: added Param class to store parameter name)
+class Param : public ASTNode
+{
+public:
+    std::string param_name;
+    int param_index; // Index in function parameter list (0-based)
+
+    Param(const std::string &name, int idx = 0)
+        : ASTNode(NodeType::Param), param_name(name), param_index(idx) {}
+};
+
+class Block : public StmtNode
+{
 public:
     std::vector<std::unique_ptr<StmtNode>> stmts;
 
     Block() : StmtNode(NodeType::Block) {}
 };
 
-class FuncDef : public ASTNode {
+class FuncDef : public ASTNode
+{
 public:
-    std::string return_type;  // "int" or "void"
+    std::string return_type; // "int" or "void"
     std::string func_name;
     std::vector<std::unique_ptr<ASTNode>> params;
     std::unique_ptr<Block> body;
 
-    FuncDef(const std::string& ret, const std::string& name)
+    FuncDef(const std::string &ret, const std::string &name)
         : ASTNode(NodeType::FuncDef), return_type(ret), func_name(name), body(nullptr) {}
 };
 
-class Program : public ASTNode {
+class Program : public ASTNode
+{
 public:
     std::vector<std::unique_ptr<FuncDef>> funcs;
 

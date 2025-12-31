@@ -73,6 +73,10 @@ std::unique_ptr<Block> make_block() {
     return std::make_unique<Block>();
 }
 
+std::unique_ptr<ASTNode> make_param(const std::string& name, int idx) {
+    return std::make_unique<Param>(name, idx);
+}
+
 %}
 
 // Bison declarations
@@ -152,9 +156,18 @@ FuncType
 FuncFParams
     : FuncFParam {
         $$ = new std::vector<std::unique_ptr<ASTNode>>();
-        $$->push_back(std::unique_ptr<ASTNode>($1));
+        auto p = std::unique_ptr<ASTNode>($1);
+        // Set index for first param
+        if (p->type == NodeType::Param) {
+            static_cast<Param*>(p.get())->param_index = 0;
+        }
+        $$->push_back(std::move(p));
     }
     | FuncFParams COMMA FuncFParam {
+        // Set index for this param (current count is size of $1)
+        if ($3->type == NodeType::Param) {
+            static_cast<Param*>($3)->param_index = static_cast<int>($1->size());
+        }
         $1->push_back(std::unique_ptr<ASTNode>($3));
         $$ = $1;
     }
@@ -163,10 +176,9 @@ FuncFParams
 // FuncFParam -> 'int' ID
 FuncFParam
     : INT ID {
-        auto param = new ASTNode(NodeType::Param);
-        param->line_no = yylineno;
-        // Store the name somewhere - using a special wrapper
-        $$ = param;
+        $$ = new Param(*$2, 0);
+        $$->line_no = yylineno;
+        delete $2;
     }
     ;
 

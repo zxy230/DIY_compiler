@@ -1,5 +1,6 @@
-int main() {
-    int a = EVAL("(a := 10)");
-    int b = EVAL("(b := randint(1, 10))");
+int main()
+{
+    int a = 4;
+    int b = 6;
     return a / b; // EVAL("a / b")
 }

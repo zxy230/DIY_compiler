@@ -143,8 +143,12 @@ std::unique_ptr<Block> make_block() {
     return std::make_unique<Block>();
 }
 
+std::unique_ptr<ASTNode> make_param(const std::string& name, int idx) {
+    return std::make_unique<Param>(name, idx);
+}
 
-#line 148 "parser.tab.cpp"
+
+#line 152 "parser.tab.cpp"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -612,12 +616,12 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,   115,   115,   119,   129,   137,   147,   148,   153,   157,
-     165,   175,   178,   184,   188,   197,   200,   204,   207,   211,
-     215,   218,   221,   224,   227,   230,   233,   240,   245,   246,
-     253,   254,   261,   262,   265,   268,   271,   274,   277,   284,
-     285,   288,   295,   296,   299,   302,   309,   310,   313,   316,
-     323,   327,   330,   333,   338,   348,   352
+       0,   119,   119,   123,   133,   141,   151,   152,   157,   166,
+     178,   187,   190,   196,   200,   209,   212,   216,   219,   223,
+     227,   230,   233,   236,   239,   242,   245,   252,   257,   258,
+     265,   266,   273,   274,   277,   280,   283,   286,   289,   296,
+     297,   300,   307,   308,   311,   314,   321,   322,   325,   328,
+     335,   339,   342,   345,   350,   360,   364
 };
 #endif
 
@@ -1250,27 +1254,27 @@ yyreduce:
   switch (yyn)
     {
   case 2: /* CompUnit: CompUnit FuncDef  */
-#line 115 "parser.y"
+#line 119 "parser.y"
                        {
         (yyvsp[-1].program)->funcs.push_back(std::unique_ptr<FuncDef>((yyvsp[0].func)));
         (yyval.program) = (yyvsp[-1].program);
     }
-#line 1259 "parser.tab.cpp"
+#line 1263 "parser.tab.cpp"
     break;
 
   case 3: /* CompUnit: FuncDef  */
-#line 119 "parser.y"
+#line 123 "parser.y"
               {
         auto prog = std::make_unique<Program>();
         prog->funcs.push_back(std::unique_ptr<FuncDef>((yyvsp[0].func)));
         (yyval.program) = prog.get();
         ast_root = std::move(prog);
     }
-#line 1270 "parser.tab.cpp"
+#line 1274 "parser.tab.cpp"
     break;
 
   case 4: /* FuncDef: FuncType ID LPAREN FuncFParams RPAREN Block  */
-#line 129 "parser.y"
+#line 133 "parser.y"
                                                   {
         (yyval.func) = new FuncDef(*(yyvsp[-4].str), *(yyvsp[-4].str));
         (yyval.func)->return_type = *(yyvsp[-5].str);
@@ -1279,11 +1283,11 @@ yyreduce:
         delete (yyvsp[-5].str);
         delete (yyvsp[-4].str);
     }
-#line 1283 "parser.tab.cpp"
+#line 1287 "parser.tab.cpp"
     break;
 
   case 5: /* FuncDef: FuncType ID LPAREN RPAREN Block  */
-#line 137 "parser.y"
+#line 141 "parser.y"
                                       {
         (yyval.func) = new FuncDef(*(yyvsp[-3].str), *(yyvsp[-3].str));
         (yyval.func)->return_type = *(yyvsp[-4].str);
@@ -1291,420 +1295,428 @@ yyreduce:
         delete (yyvsp[-4].str);
         delete (yyvsp[-3].str);
     }
-#line 1295 "parser.tab.cpp"
+#line 1299 "parser.tab.cpp"
     break;
 
   case 6: /* FuncType: INT  */
-#line 147 "parser.y"
+#line 151 "parser.y"
           { (yyval.str) = new std::string("int"); }
-#line 1301 "parser.tab.cpp"
+#line 1305 "parser.tab.cpp"
     break;
 
   case 7: /* FuncType: VOID  */
-#line 148 "parser.y"
+#line 152 "parser.y"
            { (yyval.str) = new std::string("void"); }
-#line 1307 "parser.tab.cpp"
+#line 1311 "parser.tab.cpp"
     break;
 
   case 8: /* FuncFParams: FuncFParam  */
-#line 153 "parser.y"
+#line 157 "parser.y"
                  {
         (yyval.param_list) = new std::vector<std::unique_ptr<ASTNode>>();
-        (yyval.param_list)->push_back(std::unique_ptr<ASTNode>((yyvsp[0].node)));
-    }
-#line 1316 "parser.tab.cpp"
-    break;
-
-  case 9: /* FuncFParams: FuncFParams COMMA FuncFParam  */
-#line 157 "parser.y"
-                                   {
-        (yyvsp[-2].param_list)->push_back(std::unique_ptr<ASTNode>((yyvsp[0].node)));
-        (yyval.param_list) = (yyvsp[-2].param_list);
+        auto p = std::unique_ptr<ASTNode>((yyvsp[0].node));
+        // Set index for first param
+        if (p->type == NodeType::Param) {
+            static_cast<Param*>(p.get())->param_index = 0;
+        }
+        (yyval.param_list)->push_back(std::move(p));
     }
 #line 1325 "parser.tab.cpp"
     break;
 
-  case 10: /* FuncFParam: INT ID  */
-#line 165 "parser.y"
-             {
-        auto param = new ASTNode(NodeType::Param);
-        param->line_no = yylineno;
-        // Store the name somewhere - using a special wrapper
-        (yyval.node) = param;
+  case 9: /* FuncFParams: FuncFParams COMMA FuncFParam  */
+#line 166 "parser.y"
+                                   {
+        // Set index for this param (current count is size of $1)
+        if ((yyvsp[0].node)->type == NodeType::Param) {
+            static_cast<Param*>((yyvsp[0].node))->param_index = static_cast<int>((yyvsp[-2].param_list)->size());
+        }
+        (yyvsp[-2].param_list)->push_back(std::unique_ptr<ASTNode>((yyvsp[0].node)));
+        (yyval.param_list) = (yyvsp[-2].param_list);
     }
-#line 1336 "parser.tab.cpp"
+#line 1338 "parser.tab.cpp"
+    break;
+
+  case 10: /* FuncFParam: INT ID  */
+#line 178 "parser.y"
+             {
+        (yyval.node) = new Param(*(yyvsp[0].str), 0);
+        (yyval.node)->line_no = yylineno;
+        delete (yyvsp[0].str);
+    }
+#line 1348 "parser.tab.cpp"
     break;
 
   case 11: /* Block: LBRACE BlockItems RBRACE  */
-#line 175 "parser.y"
+#line 187 "parser.y"
                                {
         (yyval.block) = (yyvsp[-1].block);
     }
-#line 1344 "parser.tab.cpp"
+#line 1356 "parser.tab.cpp"
     break;
 
   case 12: /* Block: LBRACE RBRACE  */
-#line 178 "parser.y"
+#line 190 "parser.y"
                     {
         (yyval.block) = make_block().release();
     }
-#line 1352 "parser.tab.cpp"
+#line 1364 "parser.tab.cpp"
     break;
 
   case 13: /* BlockItems: BlockItems Stmt  */
-#line 184 "parser.y"
+#line 196 "parser.y"
                       {
         (yyvsp[-1].block)->stmts.push_back(std::unique_ptr<StmtNode>((yyvsp[0].stmt)));
         (yyval.block) = (yyvsp[-1].block);
     }
-#line 1361 "parser.tab.cpp"
+#line 1373 "parser.tab.cpp"
     break;
 
   case 14: /* BlockItems: Stmt  */
-#line 188 "parser.y"
+#line 200 "parser.y"
            {
         auto block = make_block();
         block->stmts.push_back(std::unique_ptr<StmtNode>((yyvsp[0].stmt)));
         (yyval.block) = block.release();
     }
-#line 1371 "parser.tab.cpp"
+#line 1383 "parser.tab.cpp"
     break;
 
   case 15: /* Stmt: Block  */
-#line 197 "parser.y"
+#line 209 "parser.y"
             {
         (yyval.stmt) = (yyvsp[0].block);
     }
-#line 1379 "parser.tab.cpp"
+#line 1391 "parser.tab.cpp"
     break;
 
   case 16: /* Stmt: SEMICOLON  */
-#line 200 "parser.y"
+#line 212 "parser.y"
                 {
         // Empty statement - create a null statement
         (yyval.stmt) = new StmtNode(NodeType::ExprStmt);
     }
-#line 1388 "parser.tab.cpp"
+#line 1400 "parser.tab.cpp"
     break;
 
   case 17: /* Stmt: Expr SEMICOLON  */
-#line 204 "parser.y"
+#line 216 "parser.y"
                      {
         (yyval.stmt) = make_expr_stmt(std::unique_ptr<ExprNode>((yyvsp[-1].expr))).release();
     }
-#line 1396 "parser.tab.cpp"
+#line 1408 "parser.tab.cpp"
     break;
 
   case 18: /* Stmt: ID ASSIGN Expr SEMICOLON  */
-#line 207 "parser.y"
+#line 219 "parser.y"
                                {
         (yyval.stmt) = make_assign(*(yyvsp[-3].str), std::unique_ptr<ExprNode>((yyvsp[-1].expr))).release();
         delete (yyvsp[-3].str);
     }
-#line 1405 "parser.tab.cpp"
+#line 1417 "parser.tab.cpp"
     break;
 
   case 19: /* Stmt: INT ID ASSIGN Expr SEMICOLON  */
-#line 211 "parser.y"
+#line 223 "parser.y"
                                    {
         (yyval.stmt) = make_decl(*(yyvsp[-3].str), std::unique_ptr<ExprNode>((yyvsp[-1].expr))).release();
         delete (yyvsp[-3].str);
     }
-#line 1414 "parser.tab.cpp"
+#line 1426 "parser.tab.cpp"
     break;
 
   case 20: /* Stmt: IF LPAREN Expr RPAREN Stmt  */
-#line 215 "parser.y"
+#line 227 "parser.y"
                                  {
         (yyval.stmt) = make_if(std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<StmtNode>((yyvsp[0].stmt))).release();
     }
-#line 1422 "parser.tab.cpp"
+#line 1434 "parser.tab.cpp"
     break;
 
   case 21: /* Stmt: IF LPAREN Expr RPAREN Stmt ELSE Stmt  */
-#line 218 "parser.y"
+#line 230 "parser.y"
                                            {
         (yyval.stmt) = make_if(std::unique_ptr<ExprNode>((yyvsp[-4].expr)), std::unique_ptr<StmtNode>((yyvsp[-2].stmt)), std::unique_ptr<StmtNode>((yyvsp[0].stmt))).release();
     }
-#line 1430 "parser.tab.cpp"
+#line 1442 "parser.tab.cpp"
     break;
 
   case 22: /* Stmt: WHILE LPAREN Expr RPAREN Stmt  */
-#line 221 "parser.y"
+#line 233 "parser.y"
                                     {
         (yyval.stmt) = make_while(std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<StmtNode>((yyvsp[0].stmt))).release();
     }
-#line 1438 "parser.tab.cpp"
+#line 1450 "parser.tab.cpp"
     break;
 
   case 23: /* Stmt: BREAK SEMICOLON  */
-#line 224 "parser.y"
+#line 236 "parser.y"
                       {
         (yyval.stmt) = new BreakStmt();
     }
-#line 1446 "parser.tab.cpp"
+#line 1458 "parser.tab.cpp"
     break;
 
   case 24: /* Stmt: CONTINUE SEMICOLON  */
-#line 227 "parser.y"
+#line 239 "parser.y"
                          {
         (yyval.stmt) = new ContinueStmt();
     }
-#line 1454 "parser.tab.cpp"
+#line 1466 "parser.tab.cpp"
     break;
 
   case 25: /* Stmt: RETURN Expr SEMICOLON  */
-#line 230 "parser.y"
+#line 242 "parser.y"
                             {
         (yyval.stmt) = make_return(std::unique_ptr<ExprNode>((yyvsp[-1].expr))).release();
     }
-#line 1462 "parser.tab.cpp"
+#line 1474 "parser.tab.cpp"
     break;
 
   case 26: /* Stmt: RETURN SEMICOLON  */
-#line 233 "parser.y"
+#line 245 "parser.y"
                        {
         (yyval.stmt) = make_return().release();
     }
-#line 1470 "parser.tab.cpp"
-    break;
-
-  case 27: /* Expr: LOrExpr  */
-#line 240 "parser.y"
-              { (yyval.expr) = (yyvsp[0].expr); }
-#line 1476 "parser.tab.cpp"
-    break;
-
-  case 28: /* LOrExpr: LAndExpr  */
-#line 245 "parser.y"
-               { (yyval.expr) = (yyvsp[0].expr); }
 #line 1482 "parser.tab.cpp"
     break;
 
+  case 27: /* Expr: LOrExpr  */
+#line 252 "parser.y"
+              { (yyval.expr) = (yyvsp[0].expr); }
+#line 1488 "parser.tab.cpp"
+    break;
+
+  case 28: /* LOrExpr: LAndExpr  */
+#line 257 "parser.y"
+               { (yyval.expr) = (yyvsp[0].expr); }
+#line 1494 "parser.tab.cpp"
+    break;
+
   case 29: /* LOrExpr: LOrExpr OR LAndExpr  */
-#line 246 "parser.y"
+#line 258 "parser.y"
                           {
         (yyval.expr) = make_binary(OpType::Or, std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1490 "parser.tab.cpp"
+#line 1502 "parser.tab.cpp"
     break;
 
   case 30: /* LAndExpr: RelExpr  */
-#line 253 "parser.y"
+#line 265 "parser.y"
               { (yyval.expr) = (yyvsp[0].expr); }
-#line 1496 "parser.tab.cpp"
+#line 1508 "parser.tab.cpp"
     break;
 
   case 31: /* LAndExpr: LAndExpr AND RelExpr  */
-#line 254 "parser.y"
+#line 266 "parser.y"
                            {
         (yyval.expr) = make_binary(OpType::And, std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1504 "parser.tab.cpp"
+#line 1516 "parser.tab.cpp"
     break;
 
   case 32: /* RelExpr: AddExpr  */
-#line 261 "parser.y"
+#line 273 "parser.y"
               { (yyval.expr) = (yyvsp[0].expr); }
-#line 1510 "parser.tab.cpp"
+#line 1522 "parser.tab.cpp"
     break;
 
   case 33: /* RelExpr: RelExpr LT AddExpr  */
-#line 262 "parser.y"
+#line 274 "parser.y"
                          {
         (yyval.expr) = make_binary(OpType::Lt, std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1518 "parser.tab.cpp"
+#line 1530 "parser.tab.cpp"
     break;
 
   case 34: /* RelExpr: RelExpr GT AddExpr  */
-#line 265 "parser.y"
+#line 277 "parser.y"
                          {
         (yyval.expr) = make_binary(OpType::Gt, std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1526 "parser.tab.cpp"
+#line 1538 "parser.tab.cpp"
     break;
 
   case 35: /* RelExpr: RelExpr LE AddExpr  */
-#line 268 "parser.y"
+#line 280 "parser.y"
                          {
         (yyval.expr) = make_binary(OpType::Le, std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1534 "parser.tab.cpp"
+#line 1546 "parser.tab.cpp"
     break;
 
   case 36: /* RelExpr: RelExpr GE AddExpr  */
-#line 271 "parser.y"
+#line 283 "parser.y"
                          {
         (yyval.expr) = make_binary(OpType::Ge, std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1542 "parser.tab.cpp"
+#line 1554 "parser.tab.cpp"
     break;
 
   case 37: /* RelExpr: RelExpr EQ AddExpr  */
-#line 274 "parser.y"
+#line 286 "parser.y"
                          {
         (yyval.expr) = make_binary(OpType::Eq, std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1550 "parser.tab.cpp"
+#line 1562 "parser.tab.cpp"
     break;
 
   case 38: /* RelExpr: RelExpr NE AddExpr  */
-#line 277 "parser.y"
+#line 289 "parser.y"
                          {
         (yyval.expr) = make_binary(OpType::Ne, std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1558 "parser.tab.cpp"
+#line 1570 "parser.tab.cpp"
     break;
 
   case 39: /* AddExpr: MulExpr  */
-#line 284 "parser.y"
+#line 296 "parser.y"
               { (yyval.expr) = (yyvsp[0].expr); }
-#line 1564 "parser.tab.cpp"
+#line 1576 "parser.tab.cpp"
     break;
 
   case 40: /* AddExpr: AddExpr PLUS MulExpr  */
-#line 285 "parser.y"
+#line 297 "parser.y"
                            {
         (yyval.expr) = make_binary(OpType::Add, std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1572 "parser.tab.cpp"
+#line 1584 "parser.tab.cpp"
     break;
 
   case 41: /* AddExpr: AddExpr MINUS MulExpr  */
-#line 288 "parser.y"
+#line 300 "parser.y"
                             {
         (yyval.expr) = make_binary(OpType::Sub, std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1580 "parser.tab.cpp"
+#line 1592 "parser.tab.cpp"
     break;
 
   case 42: /* MulExpr: UnaryExpr  */
-#line 295 "parser.y"
+#line 307 "parser.y"
                 { (yyval.expr) = (yyvsp[0].expr); }
-#line 1586 "parser.tab.cpp"
+#line 1598 "parser.tab.cpp"
     break;
 
   case 43: /* MulExpr: MulExpr MUL UnaryExpr  */
-#line 296 "parser.y"
+#line 308 "parser.y"
                             {
         (yyval.expr) = make_binary(OpType::Mul, std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1594 "parser.tab.cpp"
+#line 1606 "parser.tab.cpp"
     break;
 
   case 44: /* MulExpr: MulExpr DIV UnaryExpr  */
-#line 299 "parser.y"
+#line 311 "parser.y"
                             {
         (yyval.expr) = make_binary(OpType::Div, std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1602 "parser.tab.cpp"
+#line 1614 "parser.tab.cpp"
     break;
 
   case 45: /* MulExpr: MulExpr MOD UnaryExpr  */
-#line 302 "parser.y"
+#line 314 "parser.y"
                             {
         (yyval.expr) = make_binary(OpType::Mod, std::unique_ptr<ExprNode>((yyvsp[-2].expr)), std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1610 "parser.tab.cpp"
+#line 1622 "parser.tab.cpp"
     break;
 
   case 46: /* UnaryExpr: PrimaryExpr  */
-#line 309 "parser.y"
+#line 321 "parser.y"
                   { (yyval.expr) = (yyvsp[0].expr); }
-#line 1616 "parser.tab.cpp"
+#line 1628 "parser.tab.cpp"
     break;
 
   case 47: /* UnaryExpr: PLUS UnaryExpr  */
-#line 310 "parser.y"
+#line 322 "parser.y"
                      {
         (yyval.expr) = make_unary(OpType::Pos, std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1624 "parser.tab.cpp"
+#line 1636 "parser.tab.cpp"
     break;
 
   case 48: /* UnaryExpr: MINUS UnaryExpr  */
-#line 313 "parser.y"
+#line 325 "parser.y"
                       {
         (yyval.expr) = make_unary(OpType::Neg, std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1632 "parser.tab.cpp"
+#line 1644 "parser.tab.cpp"
     break;
 
   case 49: /* UnaryExpr: NOT UnaryExpr  */
-#line 316 "parser.y"
+#line 328 "parser.y"
                     {
         (yyval.expr) = make_unary(OpType::Not, std::unique_ptr<ExprNode>((yyvsp[0].expr))).release();
     }
-#line 1640 "parser.tab.cpp"
+#line 1652 "parser.tab.cpp"
     break;
 
   case 50: /* PrimaryExpr: ID  */
-#line 323 "parser.y"
+#line 335 "parser.y"
          {
         (yyval.expr) = make_var(*(yyvsp[0].str)).release();
         delete (yyvsp[0].str);
     }
-#line 1649 "parser.tab.cpp"
+#line 1661 "parser.tab.cpp"
     break;
 
   case 51: /* PrimaryExpr: NUMBER  */
-#line 327 "parser.y"
+#line 339 "parser.y"
              {
         (yyval.expr) = make_const((yyvsp[0].num)).release();
     }
-#line 1657 "parser.tab.cpp"
+#line 1669 "parser.tab.cpp"
     break;
 
   case 52: /* PrimaryExpr: LPAREN Expr RPAREN  */
-#line 330 "parser.y"
+#line 342 "parser.y"
                          {
         (yyval.expr) = (yyvsp[-1].expr);
     }
-#line 1665 "parser.tab.cpp"
+#line 1677 "parser.tab.cpp"
     break;
 
   case 53: /* PrimaryExpr: ID LPAREN FuncRParams RPAREN  */
-#line 333 "parser.y"
+#line 345 "parser.y"
                                    {
         (yyval.expr) = make_call(*(yyvsp[-3].str), *(yyvsp[-1].expr_list)).release();
         delete (yyvsp[-3].str);
         delete (yyvsp[-1].expr_list);
     }
-#line 1675 "parser.tab.cpp"
+#line 1687 "parser.tab.cpp"
     break;
 
   case 54: /* PrimaryExpr: ID LPAREN RPAREN  */
-#line 338 "parser.y"
+#line 350 "parser.y"
                        {
         auto args = new std::vector<std::unique_ptr<ExprNode>>();
         (yyval.expr) = make_call(*(yyvsp[-2].str), *args).release();
         delete (yyvsp[-2].str);
         delete args;
     }
-#line 1686 "parser.tab.cpp"
+#line 1698 "parser.tab.cpp"
     break;
 
   case 55: /* FuncRParams: Expr  */
-#line 348 "parser.y"
+#line 360 "parser.y"
            {
         (yyval.expr_list) = new std::vector<std::unique_ptr<ExprNode>>();
         (yyval.expr_list)->push_back(std::unique_ptr<ExprNode>((yyvsp[0].expr)));
     }
-#line 1695 "parser.tab.cpp"
+#line 1707 "parser.tab.cpp"
     break;
 
   case 56: /* FuncRParams: FuncRParams COMMA Expr  */
-#line 352 "parser.y"
+#line 364 "parser.y"
                              {
         (yyvsp[-2].expr_list)->push_back(std::unique_ptr<ExprNode>((yyvsp[0].expr)));
         (yyval.expr_list) = (yyvsp[-2].expr_list);
     }
-#line 1704 "parser.tab.cpp"
+#line 1716 "parser.tab.cpp"
     break;
 
 
-#line 1708 "parser.tab.cpp"
+#line 1720 "parser.tab.cpp"
 
       default: break;
     }
@@ -1897,5 +1909,5 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 358 "parser.y"
+#line 370 "parser.y"
 

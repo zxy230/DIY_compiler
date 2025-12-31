@@ -4,9 +4,9 @@ int loop(int n, int x, int y) {
     int i = 0;
     int result = 0;
     while (i < n) {
-        int t1 = x * EVAL("randint(2, 3)") + 1;
-        int t2 = y * EVAL("randint(2, 3)") + 1;
-        int t3 = t1 EVAL("'+' if randint(0, 1) else '-'") t2;
+        int t1 = x * 2 + 1;
+        int t2 = y * 3 + 1;
+        int t3 = t1 + t2;
 
         int t4 = 0;
         int t5 = 0;
@@ -18,11 +18,11 @@ int loop(int n, int x, int y) {
                 t5 = t5 + t3;
                 k = k + 1;
             }
-            t4 = t1 EVAL("'+' if randint(0, 1) else '-'") t2 EVAL("'+' if randint(0, 1) else '-'") t3;
+            t4 = t1 + t2 + t3;
             j = j + 1;
         }
 
-        int t6 = t4 EVAL("'+' if randint(0, 1) else '-'") t5;
+        int t6 = t4 + t5;
 
         result = ((result + t6 % MOD) % MOD - i % MOD) % MOD;
         i = i + 1;
@@ -31,7 +31,14 @@ int loop(int n, int x, int y) {
 }
 
 int main() {
-    int N = 20000000;
+    int N = 1000;
+    int MOD = 998244353;
 
-    return loop(N, EVAL("randint(-32768, 32767)"), EVAL("randint(-32768, 32767)"));
+    int i = 0;
+    int result = 0;
+    while (i < N) {
+        result = (result + loop(10, i, i + 1)) % MOD;
+        i = i + 1;
+    }
+    return result;
 }

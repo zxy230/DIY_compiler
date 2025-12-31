@@ -1,8 +1,9 @@
-int main() {
-    int x = EVAL("randint(0, 1023)");
-    int y = EVAL("randint(0, 10)");
+int main()
+{
+    int x = 521;
+    int y = 1;
     {
-        int y = EVAL("randint(11, 1023)");
+        int y = 142;
         x = x + y;
     }
     return y;

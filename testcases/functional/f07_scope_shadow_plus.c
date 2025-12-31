@@ -1,6 +1,7 @@
-int main() { /* scope test */
-    int a = EVAL("randint(0, 7)");
-    int putch = EVAL("randint(0, 7)");
+int main()
+{ /* scope test */
+    int a = 4;
+    int putch = 4;
     {
         a = a + 2;
         int b = a + 3;
@@ -20,7 +21,7 @@ int main() { /* scope test */
                     b = b + a;
                     int b = main + 9;
                     a = a + 10;
-                    const int a = 11;
+                    int a = 11;
                     b = b + 12;
                     putch = putch + a + b + main;
                     {

@@ -14,9 +14,9 @@ int loop(int n, int x, int y) {
     int i = 0;
     int result = 0;
     while (i < n) {
-        int t1 = x * EVAL("randint(2, 3)") + 1;
-        int t2 = y * EVAL("randint(2, 3)") + 1;
-        int t3 = t1 EVAL("'+' if randint(0, 1) else '-'") t2;
+        int t1 = x * 2 + 1;
+        int t2 = y * 3 + 1;
+        int t3 = t1 + t2;
 
         int t4 = 0;
         int j = 0;
@@ -24,127 +24,25 @@ int loop(int n, int x, int y) {
             t4 = loopSideEffect(5, t4) + t3;
             j = j + 1;
         }
-        int t5 = t1 EVAL("'+' if randint(0, 1) else '-'") t2 EVAL("'+' if randint(0, 1) else '-'") t3 EVAL("'+' if randint(0, 1) else '-'") t4;
+        int t5 = t1 + t2 + t3 + t4;
 
-        int t6 = t4 EVAL("'+' if randint(0, 1) else '-'") t5;
+        int t6 = t4 + t5;
 
-        int t7 = 0;
-        {
-            int t6 = -1;
-            int a = EVAL("randint(0, 32767)");
-            int b = EVAL("randint(0, 32767)");
-            int c = -EVAL("randint(0, 32767)");
-            int p = a + EVAL("randint(0, 32767)");
-            int q = b * EVAL("randint(0, 32767)");
-            int r = c - EVAL("randint(0, 32767)");
-            int result = p * q / (r - 1);
-            t7 = result;
-        }
-
-        int t8 = 0;
-        {
-            int t7 = -1;
-            int a = EVAL("randint(-32768, 32767)");
-            int b = EVAL("randint(-32768, 32767)");
-            int c = EVAL("randint(-32768, 32767)");
-
-            int unused1 = a + b;
-            int unused2 = b * c;
-            int unused3 = a - c;
-
-            if (0) {
-                a = a + 1;
-                b = b + 2;
-                c = c + 3;
-            }
-
-            int i = 0;
-            while (i < 10) {
-                int temp = i * i;
-                i = i + 1;
-            }
-
-            t8 = a + b + c;
-        }
-
-        int t9 = 0;
-        {
-            int t8 = -1;
-            int a1 = x;
-            int a2 = a1;
-            int a3 = a2;
-            int a4 = a3;
-            int a5 = a4;
-            int a6 = a5;
-            int a7 = a6;
-            int a8 = a7;
-            int a9 = a8;
-            int a10 = a9;
-            int a11 = a10;
-            int a12 = a11;
-            int a13 = a12;
-            int a14 = a13;
-            int a15 = a14;
-            int a16 = a15;
-            int a17 = a16;
-            int a18 = a17;
-            int a19 = a18;
-            int a20 = a19;
-            int a21 = a20;
-            int a22 = a21;
-            int a23 = a22;
-            int a24 = a23;
-            int a25 = a24;
-            int a26 = a25;
-            int a27 = a26;
-            int a28 = a27;
-            int a29 = a28;
-            int a30 = a29;
-            int a31 = a30;
-            int a32 = a31;
-            int t = a32 + EVAL("randint(0, 32767)");
-            t9 = t + y;
-        }
-
-        int t10 = 0;
-        {
-            int t9 = -1;
-            int a = x - y;
-            int b = x - y;
-            int z = a + b + (x - y) * (x - y);
-            t10 = x - y - z;
-        }
-
-        int t11 = 0;
-        {
-            int t10 = -1;
-            int a = x * 1;
-            int b = a + 0;
-            int c = b * 0;
-
-            int p = y / 1;
-            int q = x * 16;
-            int r = y / 8;
-            int s = x - 0;
-            int t = y / 32;
-
-            int u = -b + (a + b);
-            int v = p - q - r + r;
-            int w = s - (b - b) EVAL("'+' if randint(0, 1) else '-'") t;
-
-            t11 = x EVAL("'+' if randint(0, 1) else '-'") y EVAL("'+' if randint(0, 1) else '-'") a EVAL("'+' if randint(0, 1) else '-'") b EVAL("'+' if randint(0, 1) else '-'") c EVAL("'+' if randint(0, 1) else '-'") p EVAL("'+' if randint(0, 1) else '-'") q EVAL("'+' if randint(0, 1) else '-'") r;
-        }
-
-        int t12 = ((((t7 + t8) % MOD + t9) % MOD + t10) % MOD + t11) % MOD;
-
-        result = ((result + t12 % MOD) % MOD - i % MOD) % MOD;
+        result = ((result + t6 % MOD) % MOD - i % MOD) % MOD;
         i = i + 1;
     }
     return result;
 }
 
 int main() {
-    int N = 20000000;
+    int N = 1000;
+    int MOD = 998244353;
 
-    return loop(N, EVAL("randint(-32768, 32767)"), EVAL("randint(-32768, 32767)"));
+    int i = 0;
+    int result = 0;
+    while (i < N) {
+        result = (result + loop(10, i, i + 1)) % MOD;
+        i = i + 1;
+    }
+    return result;
 }

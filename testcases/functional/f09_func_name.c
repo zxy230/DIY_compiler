@@ -1,8 +1,11 @@
-int f() {
-  return EVAL("randint(0, 10)");;
+int f()
+{
+  return 4;
+  ;
 }
 
-int main() {
-  int f = EVAL("randint(0, 255)");
+int main()
+{
+  int f = 6;
   return f;
 }

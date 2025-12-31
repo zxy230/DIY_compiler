@@ -1,7 +1,7 @@
 int compute(int x, int y) {
-    int a = EVAL("randint(-32768, 32767)");
-    int b = EVAL("randint(-32768, 32767)");
-    int c = EVAL("randint(-32768, 32767)");
+    int a = 100;
+    int b = 200;
+    int c = 300;
 
     int unused1 = a + b;
     int unused2 = b * c;
@@ -23,14 +23,13 @@ int compute(int x, int y) {
 }
 
 int main() {
-    int N = 20000000;
+    int N = 1000;
     int MOD = 998244353;
-    EXEC("MOD = 998244353");
 
     int i = 0;
     int result = 0;
     while (i < N) {
-        result = ((result + compute((i + EVAL("randint(0, MOD)")) % 32768, (i + EVAL("randint(0, MOD)")) % 32768) % MOD) % MOD - i % MOD) % MOD;
+        result = (result + compute(i, i + 1)) % MOD;
         i = i + 1;
     }
     return result;

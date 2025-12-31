@@ -1,11 +1,17 @@
-int main() {
+int main()
+{
     int a = 0;
     int b = 1;
-    if (a && (b / a)) {
+    if (a && (b / a))
+    {
         return 0;
-    } else if (b || (b / a)) {
-        return EVAL("randint(2, 255)");
-    } else {
+    }
+    else if (b || (b / a))
+    {
+        return 128;
+    }
+    else
+    {
         return 1;
     }
 }

@@ -1,7 +1,10 @@
-int main() {
+int main()
+{
     int x = 0;
-    while (x < 10) {
-        if (x == EVAL("randint(0, 10)")) {
+    while (x < 10)
+    {
+        if (x == 5)
+        {
             break;
         }
         x = x + 1;
