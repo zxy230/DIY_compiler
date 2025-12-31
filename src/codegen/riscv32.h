@@ -14,7 +14,6 @@ public:
 
     std::string generate() {
         output_ = "";
-        func_counter_ = 0;
 
         for (auto& func : program_ir_->functions) {
             generate_function(func.get());
@@ -26,7 +25,7 @@ public:
 private:
     ProgramIR* program_ir_;
     std::string output_;
-    int func_counter_ = 0;
+    int func_counter_ = -1;
     int stack_size_ = 0;
     std::unordered_map<std::string, int> var_stack_offset_;
 
@@ -39,22 +38,15 @@ private:
         stack_size_ = 0;
         var_stack_offset_.clear();
 
-        // First pass: collect all variables that need stack slots
-        // User variables get slots first, then temps
+        // First pass: collect stack slots for user variables only
+        // Temp variables stay in registers (t0, t1, t2) and don't need stack slots
         for (auto& instr : func->instrs) {
-            // User variables (dest of STORE) - allocate first
+            // User variables (dest of STORE) - allocate stack slots
             if (instr.op == TacOp::STORE) {
                 if (!is_temp_var(instr.dest) && var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
                     var_stack_offset_[instr.dest] = stack_size_;
                     stack_size_ += 4;
                 }
-            }
-        }
-        // Second pass: temp variables get slots after user variables
-        for (auto& instr : func->instrs) {
-            if (is_temp_var(instr.dest) && var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
-                var_stack_offset_[instr.dest] = stack_size_;
-                stack_size_ += 4;
             }
         }
 
@@ -350,12 +342,17 @@ private:
             return;
         }
 
-        // For temp variables, load from their stack slot
-        // This is necessary because t0 may have been overwritten since the temp was computed
+        // For temp variables
         if (is_temp_var(src)) {
             int offset = get_stack_offset(src);
             if (offset >= 0) {
+                // Temp has a stack slot - load from stack
                 emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
+            } else {
+                // Temp has no stack slot - value is in t0, just move it
+                if (reg != "t0") {
+                    emit("    mv " + reg + ", t0");
+                }
             }
             return;
         }
