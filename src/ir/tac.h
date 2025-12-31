@@ -98,8 +98,11 @@ public:
     }
 
     std::string next_label() {
-        return ".L" + std::to_string(label_count_++);
+        // Include function name to make labels unique across functions
+        return ".L" + name + "_" + std::to_string(label_count_++);
     }
+
+    int get_label_count() const { return label_count_; }
 
     // CFG building methods
     void build_cfg();

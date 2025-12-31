@@ -81,16 +81,6 @@ int main(int argc, char* argv[]) {
             Optimizer::optimize(ir);
         }
 
-        // Debug: Print TAC
-        std::cerr << "\n=== TAC ===\n";
-        for (auto& func : ir->functions) {
-            std::cerr << "Function: " << func->name << "\n";
-            for (auto& instr : func->instrs) {
-                std::cerr << "  " << instr.to_string() << "\n";
-            }
-            std::cerr << "\n";
-        }
-
         // Code generation
         RISC32Generator generator(ir);
         std::string asm_code = generator.generate();

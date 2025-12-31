@@ -39,16 +39,19 @@ private:
         stack_size_ = 0;
         var_stack_offset_.clear();
 
-        // First pass: count stack slots needed for all variables and temps
+        // First pass: collect all variables that need stack slots
+        // User variables get slots first, then temps
         for (auto& instr : func->instrs) {
-            // User variables (dest of STORE)
+            // User variables (dest of STORE) - allocate first
             if (instr.op == TacOp::STORE) {
                 if (!is_temp_var(instr.dest) && var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
                     var_stack_offset_[instr.dest] = stack_size_;
                     stack_size_ += 4;
                 }
             }
-            // Temp variables (dest of most ops)
+        }
+        // Second pass: temp variables get slots after user variables
+        for (auto& instr : func->instrs) {
             if (is_temp_var(instr.dest) && var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
                 var_stack_offset_[instr.dest] = stack_size_;
                 stack_size_ += 4;
@@ -61,27 +64,29 @@ private:
         emit(".globl " + func->name);
         emit(func->name + ":");
 
-        // Prologue
-        bool needs_frame = (stack_size_ > 0 || func->is_void == false);
+        // Prologue label
+        emit("prologue_" + func->name + ":");
+
+        // Prologue - only if we need stack space for user variables
+        bool needs_frame = (stack_size_ > 0);
         if (needs_frame) {
-            int frame_size = (stack_size_ > 0) ? stack_size_ : 4;
-            frame_size = ((frame_size + 15) / 16) * 16;
+            int frame_size = ((stack_size_ + 15) / 16) * 16;
+            if (frame_size < 16) frame_size = 16;
             emit("    addi sp, sp, -" + std::to_string(frame_size));
             emit("    sw ra, 0(sp)");
         }
 
-        // Generate body
-        std::string entry_label = ".Lentry_" + func->name + "_" + std::to_string(func_counter_);
-        emit(entry_label + ":");
+        // Generate body - use simple label
+        emit("label" + std::to_string(func_counter_) + ":");
 
-        generate_instrs(func);
+        for (auto& instr : func->instrs) {
+            generate_instr(instr);
+        }
 
-        // Epilogue
-        std::string ret_label = "ret_" + func->name;
-        emit(ret_label + ":");
+        // Epilogue - only if we created a frame
         if (needs_frame) {
-            int frame_size = (stack_size_ > 0) ? stack_size_ : 4;
-            frame_size = ((frame_size + 15) / 16) * 16;
+            int frame_size = ((stack_size_ + 15) / 16) * 16;
+            if (frame_size < 16) frame_size = 16;
             emit("    lw ra, 0(sp)");
             emit("    addi sp, sp, " + std::to_string(frame_size));
         }
@@ -99,8 +104,7 @@ private:
                s.substr(0, 3) == "ret" ||
                s.substr(0, 8) == "prologue" ||
                s.substr(0, 5) == "break" ||
-               s.substr(0, 9) == "continue" ||
-               s.substr(0, 7) == ".Lentry";
+               s.substr(0, 9) == "continue";
     }
 
     bool is_number(const std::string& s) {
@@ -125,12 +129,6 @@ private:
         return -1;
     }
 
-    void generate_instrs(FunctionIR* func) {
-        for (auto& instr : func->instrs) {
-            generate_instr(instr);
-        }
-    }
-
     void generate_instr(const TacInstr& instr) {
         switch (instr.op) {
             case TacOp::LABEL:
@@ -139,9 +137,9 @@ private:
 
             case TacOp::LOAD_IMM: {
                 emit("    li t0, " + instr.src1);
-                // Store to stack
+                // Only store to stack if we have a frame
                 int offset = get_stack_offset(instr.dest);
-                if (offset >= 0) {
+                if (offset >= 0 && stack_size_ > 0) {
                     emit("    sw t0, " + std::to_string(offset) + "(sp)");
                 }
                 break;
@@ -262,15 +260,15 @@ private:
             }
 
             case TacOp::LOAD: {
-                // Load from src variable into dest temp
-                // Both have pre-allocated stack slots
+                // Load from src into t0
                 int src_offset = get_stack_offset(instr.src1);
-                int dest_offset = get_stack_offset(instr.dest);
                 if (src_offset >= 0) {
                     emit("    lw t0, " + std::to_string(src_offset) + "(sp)");
                 } else {
                     emit("    lw t0, 0(sp)");
                 }
+                // Store to dest's stack slot if it has one
+                int dest_offset = get_stack_offset(instr.dest);
                 if (dest_offset >= 0) {
                     emit("    sw t0, " + std::to_string(dest_offset) + "(sp)");
                 }
@@ -314,7 +312,12 @@ private:
 
             case TacOp::MOVE: {
                 if (instr.dest == "a0") {
-                    load_src(instr.src1, "a0");
+                    if (is_number(instr.src1)) {
+                        emit("    li a0, " + instr.src1);
+                    } else {
+                        // Load src1 into a0 (may need to load from stack for temps)
+                        load_src(instr.src1, "a0");
+                    }
                 } else {
                     load_src(instr.src1, "t0");
                     store_dest(instr.dest, "t0");
@@ -347,13 +350,20 @@ private:
             return;
         }
 
-        // Load from stack
+        // For temp variables, load from their stack slot
+        // This is necessary because t0 may have been overwritten since the temp was computed
+        if (is_temp_var(src)) {
+            int offset = get_stack_offset(src);
+            if (offset >= 0) {
+                emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
+            }
+            return;
+        }
+
+        // Load from stack for user variables
         int offset = get_stack_offset(src);
         if (offset >= 0) {
             emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
-        } else {
-            // Default: load from stack offset 0
-            emit("    lw " + reg + ", 0(sp)");
         }
     }
 
@@ -361,32 +371,36 @@ private:
     void load_src_preserve(const std::string& src, const std::string& reg, const std::string& preserve_reg) {
         if (is_label(src) || src.empty()) return;
 
-        // Check if it's a number
+        // Check if it's a number - no need to preserve when loading immediate
         if (is_number(src)) {
-            // Save preserve_reg first, then load immediate
-            emit("    mv t6, " + preserve_reg);
             emit("    li " + reg + ", " + src);
-            emit("    mv " + preserve_reg + ", t6");
             return;
         }
 
-        // Load from stack, preserving preserve_reg
-        int offset = get_stack_offset(src);
-        if (offset >= 0) {
-            emit("    mv t6, " + preserve_reg);
-            emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
-            emit("    mv " + preserve_reg + ", t6");
-        } else {
-            emit("    mv t6, " + preserve_reg);
-            emit("    lw " + reg + ", 0(sp)");
-            emit("    mv " + preserve_reg + ", t6");
+        // For temp variables, load from their stack slot (t0 may have been overwritten)
+        if (is_temp_var(src)) {
+            int offset = get_stack_offset(src);
+            if (offset >= 0) {
+                emit("    mv t6, " + preserve_reg);
+                emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
+                emit("    mv " + preserve_reg + ", t6");
+            }
+            return;
         }
+
+        // Load from stack for user variables, preserving preserve_reg
+        int offset = get_stack_offset(src);
+        emit("    mv t6, " + preserve_reg);
+        if (offset >= 0) {
+            emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
+        }
+        emit("    mv " + preserve_reg + ", t6");
     }
 
     // Store register value to destination
     void store_dest(const std::string& dest, const std::string& reg) {
         if (is_label(dest) || dest.empty()) return;
-        if (dest == "a0") return;  // Return value register
+        if (dest == "a0") return;
 
         int offset = get_stack_offset(dest);
         if (offset >= 0) {

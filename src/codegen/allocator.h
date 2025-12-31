@@ -100,7 +100,7 @@ private:
     };
 
     std::vector<Interval> intervals_;
-    std::set<int> active_;  // Set of interval end positions
+    std::set<size_t> active_;  // Set of active interval indices
 
     void init_registers() {
         // RISC-V 32-bit registers
@@ -201,31 +201,31 @@ private:
                   });
     }
 
-    // Linear scan register allocation
+    // Linear scan register allocation - improved version
     void linear_scan() {
+        // active_ will store indices of intervals that are currently active
         active_.clear();
         std::vector<bool> reg_used_(allocatable_regs_.size(), false);
         int next_spill_offset = 4;  // Start after ra
 
         for (size_t i = 0; i < intervals_.size(); i++) {
             // Remove expired intervals from active set
-            auto it = active_.begin();
-            while (it != active_.end()) {
-                int idx = *it;
-                // Find the interval ending at this position
-                for (auto& interval : intervals_) {
-                    if (interval.end == idx) {
-                        // Free the register
-                        for (size_t r = 0; r < allocatable_regs_.size(); r++) {
-                            if (allocatable_regs_[r].name == interval.reg) {
-                                reg_used_[r] = false;
-                                break;
-                            }
+            // An interval expires if its end < current interval's start
+            std::set<size_t> to_remove;
+            for (size_t idx : active_) {
+                if (intervals_[idx].end < intervals_[i].start) {
+                    // Free the register
+                    for (size_t r = 0; r < allocatable_regs_.size(); r++) {
+                        if (allocatable_regs_[r].name == intervals_[idx].reg) {
+                            reg_used_[r] = false;
+                            break;
                         }
-                        break;
                     }
+                    to_remove.insert(idx);
                 }
-                it = active_.erase(it);
+            }
+            for (size_t idx : to_remove) {
+                active_.erase(idx);
             }
 
             // Find a free register or spill
@@ -243,46 +243,48 @@ private:
                 // Allocate register
                 interval.reg = allocatable_regs_[reg_idx].name;
                 reg_used_[reg_idx] = true;
+                // Add to active set
+                active_.insert(i);
             } else {
-                // Spill: find interval that ends latest
+                // Spill: find interval in active set that ends latest
                 int spill_idx = -1;
                 int latest_end = -1;
-                for (size_t j = 0; j < intervals_.size(); j++) {
-                    if (active_.count(intervals_[j].end) && intervals_[j].end > latest_end) {
+                for (size_t idx : active_) {
+                    if (intervals_[idx].end > latest_end) {
                         // Prefer to spill non-argument registers
-                        bool is_arg = intervals_[j].var.find("a") == 0 &&
-                                     intervals_[j].var.size() == 2 &&
-                                     isdigit(intervals_[j].var[1]);
+                        bool is_arg = intervals_[idx].var.find("a") == 0 &&
+                                     intervals_[idx].var.size() == 2 &&
+                                     isdigit(intervals_[idx].var[1]);
                         if (!is_arg) {
-                            latest_end = intervals_[j].end;
-                            spill_idx = j;
+                            latest_end = intervals_[idx].end;
+                            spill_idx = idx;
                         }
                     }
                 }
 
-                if (spill_idx != -1 && latest_end > interval.end) {
+                if (spill_idx >= 0 && latest_end > interval.end) {
                     // Spill the existing interval
                     intervals_[spill_idx].spill_offset = next_spill_offset;
                     next_spill_offset += 4;
 
-                    // Allocate register to current interval
+                    // Free the register from spilled interval
                     for (size_t r = 0; r < allocatable_regs_.size(); r++) {
                         if (allocatable_regs_[r].name == intervals_[spill_idx].reg) {
                             reg_used_[r] = false;
                             break;
                         }
                     }
+                    // Allocate register to current interval
                     interval.reg = intervals_[spill_idx].reg;
-                    reg_used_[reg_idx = allocatable_regs_.size() - 1] = true;
+                    reg_used_[allocatable_regs_.size() - 1] = true;
+                    // Add to active set
+                    active_.insert(i);
                 } else {
-                    // Must spill current interval
+                    // Must spill current interval - do NOT add to active set
                     interval.spill_offset = next_spill_offset;
                     next_spill_offset += 4;
                 }
             }
-
-            // Add to active set
-            active_.insert(interval.end);
         }
 
         // Build per-instruction allocation

@@ -50,6 +50,13 @@ private:
     std::unordered_map<std::string, int> var_offset_;
     int next_offset_ = 4; // Start after ra (4 bytes)
 
+    // Stack for nested loop break/continue labels
+    struct LoopLabels {
+        std::string break_label;
+        std::string continue_label;
+    };
+    std::stack<LoopLabels> loop_labels_stack_;
+
     void build_function(FuncDef *func)
     {
         current_func_ = program_ir_->get_function(func->func_name);
@@ -121,10 +128,14 @@ private:
             build_return(static_cast<ReturnStmt *>(stmt));
             break;
         case NodeType::BreakStmt:
-            emit(TacOp::JUMP, "", "", "break_end");
+            if (!loop_labels_stack_.empty()) {
+                emit(TacOp::JUMP, "", "", loop_labels_stack_.top().break_label);
+            }
             break;
         case NodeType::ContinueStmt:
-            emit(TacOp::JUMP, "", "", "continue_start");
+            if (!loop_labels_stack_.empty()) {
+                emit(TacOp::JUMP, "", "", loop_labels_stack_.top().continue_label);
+            }
             break;
         default:
             break;
@@ -172,12 +183,19 @@ private:
         std::string loop_start = current_func_->next_label();
         std::string loop_end = current_func_->next_label();
 
+        // Push break/continue labels for nested loops
+        LoopLabels labels{loop_end, loop_start};
+        loop_labels_stack_.push(labels);
+
         emit(TacOp::LABEL, "", "", loop_start);
         std::string cond = build_expr(stmt->cond.get());
         emit(TacOp::BEQZ, "", cond, loop_end);
         build_stmt(stmt->body.get());
         emit(TacOp::JUMP, "", "", loop_start);
         emit(TacOp::LABEL, "", "", loop_end);
+
+        // Pop labels
+        loop_labels_stack_.pop();
     }
 
     void build_return(ReturnStmt *stmt)
