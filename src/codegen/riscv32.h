@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <set>
 #include <cctype>
+#include <algorithm>
 
 class RISC32Generator {
 public:
@@ -38,15 +39,43 @@ private:
         stack_size_ = 0;
         var_stack_offset_.clear();
 
-        // First pass: collect stack slots for user variables only
-        // Temp variables stay in registers (t0, t1, t2) and don't need stack slots
+        // First pass: collect stack slots for user variables FIRST
+        // Then collect stack slots for temp variables that are actually used
         for (auto& instr : func->instrs) {
-            // User variables (dest of STORE) - allocate stack slots
+            // User variables (dest of STORE) - allocate stack slots FIRST
             if (instr.op == TacOp::STORE) {
                 if (!is_temp_var(instr.dest) && var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
                     var_stack_offset_[instr.dest] = stack_size_;
                     stack_size_ += 4;
                 }
+            }
+        }
+        // Second pass: temp variables that need stack slots
+        // Only allocate for temps that are:
+        // 1. LOAD dest (will be used later)
+        // 2. LOAD_IMM dest (will be used later)
+        // 3. Results of binary operations
+        for (auto& instr : func->instrs) {
+            // Skip LOAD_IMM temps if they're immediately moved to a0
+            if (instr.op == TacOp::LOAD_IMM) {
+                // Check if this temp is immediately used in a MOVE to a0
+                auto it = std::next(std::find_if(func->instrs.begin(), func->instrs.end(),
+                    [&](const TacInstr& i) { return &i == &instr; }));
+                if (it != func->instrs.end() && it->op == TacOp::MOVE && it->dest == "a0" && it->src1 == instr.dest) {
+                    // This temp is only used for MOVE to a0, don't allocate stack slot
+                    continue;
+                }
+            }
+
+            if (instr.op == TacOp::LOAD && is_temp_var(instr.dest) &&
+                var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
+                var_stack_offset_[instr.dest] = stack_size_;
+                stack_size_ += 4;
+            }
+            if (instr.op == TacOp::LOAD_IMM && is_temp_var(instr.dest) &&
+                var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
+                var_stack_offset_[instr.dest] = stack_size_;
+                stack_size_ += 4;
             }
         }
 
@@ -129,9 +158,9 @@ private:
 
             case TacOp::LOAD_IMM: {
                 emit("    li t0, " + instr.src1);
-                // Only store to stack if we have a frame
+                // Store to stack slot if temp has one
                 int offset = get_stack_offset(instr.dest);
-                if (offset >= 0 && stack_size_ > 0) {
+                if (offset >= 0) {
                     emit("    sw t0, " + std::to_string(offset) + "(sp)");
                 }
                 break;
@@ -374,14 +403,21 @@ private:
             return;
         }
 
-        // For temp variables, load from their stack slot (t0 may have been overwritten)
+        // For temp variables without stack slots (like results of LOAD_IMM),
+        // the value is in t0, just move it if needed
         if (is_temp_var(src)) {
             int offset = get_stack_offset(src);
-            if (offset >= 0) {
-                emit("    mv t6, " + preserve_reg);
-                emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
-                emit("    mv " + preserve_reg + ", t6");
+            if (offset < 0) {
+                // Temp has no stack slot - value is in t0
+                if (reg != "t0") {
+                    emit("    mv " + reg + ", t0");
+                }
+                return;
             }
+            // Temp has a stack slot - load from stack with preservation
+            emit("    mv t6, " + preserve_reg);
+            emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
+            emit("    mv " + preserve_reg + ", t6");
             return;
         }
 
