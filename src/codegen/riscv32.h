@@ -16,6 +16,15 @@ public:
     std::string generate() {
         output_ = "";
 
+        // Add a simple entry point for RISC-V Linux (qemu-user)
+        emit(".globl _start");
+        emit("_start:");
+        emit("    # qemu-user sets up stack, just call main");
+        emit("    call main");
+        emit("    # Exit with syscall (a7=93 for exit, a0=exit code)");
+        emit("    li a7, 93");
+        emit("    ecall");
+
         for (auto& func : program_ir_->functions) {
             generate_function(func.get());
         }
@@ -84,6 +93,12 @@ private:
                  instr.op == TacOp::EQ || instr.op == TacOp::NE || instr.op == TacOp::AND ||
                  instr.op == TacOp::OR) &&
                 is_temp_var(instr.dest) &&
+                var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
+                var_stack_offset_[instr.dest] = var_stack_size + 4;  // +4 for ra
+                var_stack_size += 4;
+            }
+            // Allocate stack slots for CALL results
+            if (instr.op == TacOp::CALL && is_temp_var(instr.dest) &&
                 var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
                 var_stack_offset_[instr.dest] = var_stack_size + 4;  // +4 for ra
                 var_stack_size += 4;
@@ -447,7 +462,7 @@ private:
     // Store register value to destination
     void store_dest(const std::string& dest, const std::string& reg) {
         if (is_label(dest) || dest.empty()) return;
-        if (dest == "a0") return;
+        // Note: we don't skip "a0" anymore - the caller should handle that if needed
 
         int offset = get_stack_offset(dest);
         if (offset >= 0) {
