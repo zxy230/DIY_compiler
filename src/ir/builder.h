@@ -164,16 +164,21 @@ private:
     void build_if(IfStmt *stmt)
     {
         std::string cond = build_expr(stmt->cond.get());
-        std::string else_label = current_func_->next_label();
         std::string end_label = current_func_->next_label();
 
-        emit(TacOp::BEQZ, "", cond, else_label);
-        build_stmt(stmt->then_stmt.get());
-        emit(TacOp::JUMP, "", "", end_label);
-        emit(TacOp::LABEL, "", "", else_label);
-        if (stmt->else_stmt)
-        {
+        if (stmt->else_stmt) {
+            // if ... else ...: need else_label
+            std::string else_label = current_func_->next_label();
+            emit(TacOp::BEQZ, "", cond, else_label);
+            build_stmt(stmt->then_stmt.get());
+            emit(TacOp::JUMP, "", "", end_label);
+            emit(TacOp::LABEL, "", "", else_label);
             build_stmt(stmt->else_stmt.get());
+        } else {
+            // if ... without else: jump to end if condition is false
+            emit(TacOp::BEQZ, "", cond, end_label);
+            build_stmt(stmt->then_stmt.get());
+            // No need to jump to end - just fall through
         }
         emit(TacOp::LABEL, "", "", end_label);
     }

@@ -30,6 +30,7 @@ private:
     int func_counter_ = -1;
     int stack_size_ = 0;
     std::unordered_map<std::string, int> var_stack_offset_;
+    std::string epilogue_label_;  // Label for epilogue (used by RET)
 
     void emit(const std::string& line) {
         output_ += line + "\n";
@@ -107,6 +108,9 @@ private:
         emit(".globl " + func->name);
         emit(func->name + ":");
 
+        // Set epilogue label for this function
+        epilogue_label_ = "epilogue_" + std::to_string(func_counter_);
+
         // Prologue label
         emit("prologue_" + func->name + ":");
 
@@ -126,6 +130,9 @@ private:
             generate_instr(instr);
         }
 
+        // Epilogue label
+        emit(epilogue_label_ + ":");
+
         // Epilogue - only if we created a frame
         if (needs_frame) {
             int frame_size = ((stack_size_ + 15) / 16) * 16;
@@ -133,7 +140,7 @@ private:
             emit("    lw ra, 0(sp)");
             emit("    addi sp, sp, " + std::to_string(frame_size));
         }
-        emit("    ret");
+        emit("    jr ra");
     }
 
     bool is_temp_var(const std::string& var) {
@@ -146,6 +153,7 @@ private:
                s.substr(0, 5) == "label" ||
                s.substr(0, 3) == "ret" ||
                s.substr(0, 8) == "prologue" ||
+               s.substr(0, 8) == "epilogue" ||
                s.substr(0, 5) == "break" ||
                s.substr(0, 9) == "continue";
     }
@@ -368,6 +376,8 @@ private:
             }
 
             case TacOp::RET: {
+                // Jump to epilogue instead of just returning
+                emit("    j " + epilogue_label_);
                 break;
             }
 
