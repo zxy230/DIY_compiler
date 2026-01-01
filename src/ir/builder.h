@@ -49,6 +49,11 @@ private:
     FunctionIR *current_func_ = nullptr;
     std::unordered_map<std::string, int> var_offset_;
     int next_offset_ = 4; // Start after ra (4 bytes)
+    int scope_level_ = 0; // Track current scope level for unique variable names
+
+    // Stack for tracking block scope (for proper nested variable handling)
+    // Each entry is a list of (var_name, old_offset) pairs for variables that were shadowed
+    std::vector<std::vector<std::pair<std::string, int>>> block_scope_stack_;
 
     // Stack for nested loop break/continue labels
     struct LoopLabels {
@@ -93,10 +98,35 @@ private:
 
     void build_block(Block *block)
     {
+        // Enter new block scope
+        scope_level_++;
+        block_scope_stack_.push_back(std::vector<std::pair<std::string, int>>());
+        int saved_offset = next_offset_;
+        #// std::cerr << "[DEBUG] Entering block scope " << scope_level_ << ", saved_offset=" << saved_offset << std::endl;
+
         for (auto &stmt : block->stmts)
         {
             build_stmt(stmt.get());
         }
+
+        // Exit block scope: restore shadowed variables
+        #// std::cerr << "[DEBUG] Exiting block, restoring:" << std::endl;
+        for (const auto& pair : block_scope_stack_.back()) {
+            if (pair.second >= 0) {
+                // Restore the outer scope's offset for this variable
+                #// std::cerr << "[DEBUG]   " << pair.first << " -> " << pair.second << std::endl;
+                var_offset_[pair.first] = pair.second;
+            } else {
+                // Variable didn't exist in outer scope, remove it
+                #// std::cerr << "[DEBUG]   " << pair.first << " (remove)" << std::endl;
+                var_offset_.erase(pair.first);
+            }
+        }
+        // Restore offset to what it was at block entry (discard block-local allocations)
+        next_offset_ = saved_offset;
+        #// std::cerr << "[DEBUG] Restored next_offset_=" << next_offset_ << std::endl;
+        block_scope_stack_.pop_back();
+        scope_level_--;
     }
 
     void build_stmt(StmtNode *stmt)
@@ -144,21 +174,44 @@ private:
 
     void build_decl(DeclStmt *stmt)
     {
+        // Create unique variable name for nested scopes
+        std::string unique_name = stmt->var_name;
+        if (scope_level_ > 0) {
+            unique_name = stmt->var_name + ".s" + std::to_string(scope_level_);
+        }
+
+        // Save old offset if variable exists (for shadowing)
+        int old_offset = -1;
+        if (var_offset_.find(unique_name) != var_offset_.end()) {
+            old_offset = var_offset_[unique_name];
+            #// std::cerr << "[DEBUG] Declaring " << stmt->var_name << " (as " << unique_name << ") shadows old offset " << old_offset << std::endl;
+        } else {
+            #// std::cerr << "[DEBUG] Declaring " << stmt->var_name << " (as " << unique_name << ") at new offset " << next_offset_ << std::endl;
+        }
+
         // Assign stack offset
-        var_offset_[stmt->var_name] = next_offset_;
+        var_offset_[unique_name] = next_offset_;
+        #// std::cerr << "[DEBUG]   -> Assigned offset " << next_offset_ << " to " << unique_name << std::endl;
+
+        // Track this variable in the current block scope with its old offset
+        if (!block_scope_stack_.empty()) {
+            block_scope_stack_.back().push_back({unique_name, old_offset});
+        }
+
         next_offset_ += 4;
 
         // Build initializer
         std::string init_val = build_expr(stmt->init_expr.get());
 
-        // Store to stack
-        emit(TacOp::STORE, stmt->var_name, init_val, "");
+        // Store to stack using unique name
+        emit(TacOp::STORE, unique_name, init_val, "");
     }
 
     void build_assign(AssignStmt *stmt)
     {
         std::string value = build_expr(stmt->value.get());
-        emit(TacOp::STORE, stmt->var_name, value, "");
+        std::string unique_name = resolve_var_name(stmt->var_name);
+        emit(TacOp::STORE, unique_name, value, "");
     }
 
     void build_if(IfStmt *stmt)
@@ -201,6 +254,27 @@ private:
 
         // Pop labels
         loop_labels_stack_.pop();
+    }
+
+    // Resolve variable name to its unique scoped name
+    std::string resolve_var_name(const std::string& var_name) {
+        // First try the scoped name at current scope level
+        if (scope_level_ > 0) {
+            std::string scoped_name = var_name + ".s" + std::to_string(scope_level_);
+            if (var_offset_.find(scoped_name) != var_offset_.end()) {
+                return scoped_name;
+            }
+        }
+        // If not found at current level, search through outer scopes
+        // Start from scope_level_ - 1 and go down to 1
+        for (int level = scope_level_ - 1; level >= 1; level--) {
+            std::string scoped_name = var_name + ".s" + std::to_string(level);
+            if (var_offset_.find(scoped_name) != var_offset_.end()) {
+                return scoped_name;
+            }
+        }
+        // Fall back to the base name (for params or undeclared variables)
+        return var_name;
     }
 
     void build_return(ReturnStmt *stmt)
@@ -308,7 +382,8 @@ private:
         {
             auto e = static_cast<VarExpr *>(expr);
             std::string result = current_func_->next_temp();
-            emit(TacOp::LOAD, result, e->var_name, "");
+            std::string unique_name = resolve_var_name(e->var_name);
+            emit(TacOp::LOAD, result, unique_name, "");
             return result;
         }
         case NodeType::ConstExpr:
@@ -327,6 +402,7 @@ private:
     {
         if (current_func_)
         {
+            #// std::cerr << "[DEBUG-EMIT] " << (int)op << " " << dest << ", " << src1 << ", " << src2 << std::endl;
             current_func_->instrs.emplace_back(op, dest, src1, src2);
         }
     }

@@ -90,6 +90,9 @@ extern int yydebug;
 #include <vector>
 #include <memory>
 #include "ast_node.h"
+#include <vector>
+#include <memory>
+#include "ast_node.h"
 #endif
 
 /* Value type.  */

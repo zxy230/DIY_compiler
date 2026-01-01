@@ -43,11 +43,13 @@ private:
 
         // First pass: collect stack slots for user variables FIRST
         // Then collect stack slots for temp variables that are actually used
+        #// std::cerr << "[DEBUG-CODEGEN] First pass: allocating stack slots for user variables" << std::endl;
         for (auto& instr : func->instrs) {
             // User variables (dest of STORE) - allocate stack slots FIRST
             if (instr.op == TacOp::STORE) {
                 if (!is_temp_var(instr.dest) && var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
                     var_stack_offset_[instr.dest] = var_stack_size + 4;  // +4 for ra
+                    #// std::cerr << "[DEBUG-CODEGEN]   " << instr.dest << " -> offset " << (var_stack_size + 4) << std::endl;
                     var_stack_size += 4;
                 }
             }
@@ -99,8 +101,8 @@ private:
         }
 
         // Stack size includes space for ra (4 bytes) + variable space
-        // Only add ra space if we actually have variables
-        stack_size_ = var_stack_size > 0 ? var_stack_size + 4 : 0;
+        // Always allocate space for ra (4 bytes) + variable space
+        stack_size_ = var_stack_size + 4;
 
         // Header
         emit(".text");
@@ -119,7 +121,7 @@ private:
         if (needs_frame) {
             int frame_size = ((stack_size_ + 15) / 16) * 16;
             if (frame_size < 16) frame_size = 16;
-            emit("    addi sp, sp, -" + std::to_string(frame_size));
+            adjust_sp(-frame_size);
             emit("    sw ra, 0(sp)");
         }
 
@@ -138,13 +140,45 @@ private:
             int frame_size = ((stack_size_ + 15) / 16) * 16;
             if (frame_size < 16) frame_size = 16;
             emit("    lw ra, 0(sp)");
-            emit("    addi sp, sp, " + std::to_string(frame_size));
+            adjust_sp(frame_size);
         }
         emit("    jr ra");
     }
 
     bool is_temp_var(const std::string& var) {
         return !var.empty() && var[0] == '.';
+    }
+
+    // Adjust stack pointer by a given amount (can be > 2047)
+    void adjust_sp(int delta) {
+        if (delta == 0) return;
+
+        if (delta >= -2047 && delta <= 2047) {
+            if (delta < 0) {
+                emit("    addi sp, sp, " + std::to_string(delta));
+            } else {
+                emit("    addi sp, sp, " + std::to_string(delta));
+            }
+        } else {
+            // For large adjustments, use lui + addi
+            int abs_delta = delta > 0 ? delta : -delta;
+            int hi = (abs_delta >> 12) & 0xFFFFF;
+            int lo = abs_delta & 0xFFF;
+            if (lo >= 2048) {
+                hi += 1;
+                lo -= 4096;
+            }
+            // lui t0, hi
+            emit("    lui t0, " + std::to_string(hi));
+            if (lo != 0) {
+                emit("    addi t0, t0, " + std::to_string(lo));
+            }
+            if (delta > 0) {
+                emit("    add sp, sp, t0");  // sp = sp + delta
+            } else {
+                emit("    sub sp, sp, t0");  // sp = sp - delta
+            }
+        }
     }
 
     bool is_label(const std::string& s) {
@@ -171,11 +205,11 @@ private:
         return true;
     }
 
-    // Get stack offset for a variable
+    // Get stack offset for a variable (adds +4 for return address)
     int get_stack_offset(const std::string& var) {
         auto it = var_stack_offset_.find(var);
         if (it != var_stack_offset_.end()) {
-            return it->second;
+            return it->second + 4;  // +4 for ra at offset 0
         }
         return -1;
     }
@@ -191,7 +225,7 @@ private:
                 // Store to stack slot if temp has one
                 int offset = get_stack_offset(instr.dest);
                 if (offset >= 0) {
-                    emit("    sw t0, " + std::to_string(offset) + "(sp)");
+                    store_to_stack_offset("t0", offset);
                 }
                 break;
             }
@@ -314,13 +348,13 @@ private:
                 // Load from src into t0
                 int src_offset = get_stack_offset(instr.src1);
                 if (src_offset >= 0) {
-                    emit("    lw t0, " + std::to_string(src_offset) + "(sp)");
+                    load_from_stack_offset("t0", src_offset);
                 }
                 // If src_offset < 0, the value is already in t0 (temp var case)
                 // Store to dest's stack slot if it has one
                 int dest_offset = get_stack_offset(instr.dest);
                 if (dest_offset >= 0) {
-                    emit("    sw t0, " + std::to_string(dest_offset) + "(sp)");
+                    store_to_stack_offset("t0", dest_offset);
                 }
                 break;
             }
@@ -407,7 +441,7 @@ private:
             int offset = get_stack_offset(src);
             if (offset >= 0) {
                 // Temp has a stack slot - load from stack
-                emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
+                load_from_stack_offset(reg, offset);
             } else {
                 // Temp has no stack slot - value is in t0, just move it
                 if (reg != "t0") {
@@ -420,7 +454,7 @@ private:
         // Load from stack for user variables
         int offset = get_stack_offset(src);
         if (offset >= 0) {
-            emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
+            load_from_stack_offset(reg, offset);
         }
     }
 
@@ -447,7 +481,7 @@ private:
             }
             // Temp has a stack slot - load from stack with preservation
             emit("    mv t6, " + preserve_reg);
-            emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
+            load_from_stack_offset(reg, offset);
             emit("    mv " + preserve_reg + ", t6");
             return;
         }
@@ -456,7 +490,7 @@ private:
         int offset = get_stack_offset(src);
         emit("    mv t6, " + preserve_reg);
         if (offset >= 0) {
-            emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
+            load_from_stack_offset(reg, offset);
         }
         emit("    mv " + preserve_reg + ", t6");
     }
@@ -468,7 +502,59 @@ private:
 
         int offset = get_stack_offset(dest);
         if (offset >= 0) {
+            store_to_stack_offset(reg, offset);
+        }
+    }
+
+    // Store to stack with offset, handling large offsets (> 2047)
+    void store_to_stack_offset(const std::string& reg, int offset) {
+        if (offset <= 2047) {
             emit("    sw " + reg + ", " + std::to_string(offset) + "(sp)");
+        } else {
+            // For large offsets, use lui + addi to compute address
+            // sw reg, offset(sp) becomes:
+            //   lui t0, %hi(offset)
+            //   addi t0, t0, %lo(offset)
+            //   sw reg, 0(t0)
+            int hi = (offset >> 12) & 0xFFFFF;  // Upper 20 bits
+            int lo = offset & 0xFFF;  // Lower 12 bits (signed)
+            if (lo >= 2048) {
+                // Adjust hi/lo for signed lower part
+                hi += 1;
+                lo -= 4096;
+            }
+            emit("    lui t0, " + std::to_string(hi));
+            if (lo != 0) {
+                emit("    addi t0, t0, " + std::to_string(lo));
+            }
+            emit("    add t0, sp, t0");
+            emit("    sw " + reg + ", 0(t0)");
+        }
+    }
+
+    // Load from stack with offset, handling large offsets (> 2047)
+    void load_from_stack_offset(const std::string& reg, int offset) {
+        if (offset <= 2047) {
+            emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
+        } else {
+            // For large offsets, use lui + addi to compute address
+            // lw reg, offset(sp) becomes:
+            //   lui t0, %hi(offset)
+            //   addi t0, t0, %lo(offset)
+            //   lw reg, 0(t0)
+            int hi = (offset >> 12) & 0xFFFFF;  // Upper 20 bits
+            int lo = offset & 0xFFF;  // Lower 12 bits (signed)
+            if (lo >= 2048) {
+                // Adjust hi/lo for signed lower part
+                hi += 1;
+                lo -= 4096;
+            }
+            emit("    lui t0, " + std::to_string(hi));
+            if (lo != 0) {
+                emit("    addi t0, t0, " + std::to_string(lo));
+            }
+            emit("    add t0, sp, t0");
+            emit("    lw " + reg + ", 0(t0)");
         }
     }
 };
