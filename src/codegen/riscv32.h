@@ -16,15 +16,7 @@ public:
     std::string generate() {
         output_ = "";
 
-        // Add a simple entry point for RISC-V Linux (qemu-user)
-        emit(".globl _start");
-        emit("_start:");
-        emit("    # qemu-user sets up stack, just call main");
-        emit("    call main");
-        emit("    # Exit with syscall (a7=93 for exit, a0=exit code)");
-        emit("    li a7, 93");
-        emit("    ecall");
-
+        // Generate code for each function
         for (auto& func : program_ir_->functions) {
             generate_function(func.get());
         }
