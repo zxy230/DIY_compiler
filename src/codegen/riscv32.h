@@ -36,7 +36,7 @@ private:
 
     void generate_function(FunctionIR* func) {
         func_counter_++;
-        stack_size_ = 0;
+        int var_stack_size = 0;  // Stack space for variables (starts at 0)
         var_stack_offset_.clear();
 
         // First pass: collect stack slots for user variables FIRST
@@ -45,8 +45,8 @@ private:
             // User variables (dest of STORE) - allocate stack slots FIRST
             if (instr.op == TacOp::STORE) {
                 if (!is_temp_var(instr.dest) && var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
-                    var_stack_offset_[instr.dest] = stack_size_;
-                    stack_size_ += 4;
+                    var_stack_offset_[instr.dest] = var_stack_size + 4;  // +4 for ra
+                    var_stack_size += 4;
                 }
             }
         }
@@ -69,15 +69,30 @@ private:
 
             if (instr.op == TacOp::LOAD && is_temp_var(instr.dest) &&
                 var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
-                var_stack_offset_[instr.dest] = stack_size_;
-                stack_size_ += 4;
+                var_stack_offset_[instr.dest] = var_stack_size + 4;  // +4 for ra
+                var_stack_size += 4;
             }
             if (instr.op == TacOp::LOAD_IMM && is_temp_var(instr.dest) &&
                 var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
-                var_stack_offset_[instr.dest] = stack_size_;
-                stack_size_ += 4;
+                var_stack_offset_[instr.dest] = var_stack_size + 4;  // +4 for ra
+                var_stack_size += 4;
+            }
+            // Allocate stack slots for binary operation results (ADD, SUB, etc.)
+            if ((instr.op == TacOp::ADD || instr.op == TacOp::SUB || instr.op == TacOp::MUL ||
+                 instr.op == TacOp::DIV || instr.op == TacOp::MOD || instr.op == TacOp::LT ||
+                 instr.op == TacOp::GT || instr.op == TacOp::LE || instr.op == TacOp::GE ||
+                 instr.op == TacOp::EQ || instr.op == TacOp::NE || instr.op == TacOp::AND ||
+                 instr.op == TacOp::OR) &&
+                is_temp_var(instr.dest) &&
+                var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
+                var_stack_offset_[instr.dest] = var_stack_size + 4;  // +4 for ra
+                var_stack_size += 4;
             }
         }
+
+        // Stack size includes space for ra (4 bytes) + variable space
+        // Only add ra space if we actually have variables
+        stack_size_ = var_stack_size > 0 ? var_stack_size + 4 : 0;
 
         // Header
         emit(".text");
@@ -285,9 +300,8 @@ private:
                 int src_offset = get_stack_offset(instr.src1);
                 if (src_offset >= 0) {
                     emit("    lw t0, " + std::to_string(src_offset) + "(sp)");
-                } else {
-                    emit("    lw t0, 0(sp)");
                 }
+                // If src_offset < 0, the value is already in t0 (temp var case)
                 // Store to dest's stack slot if it has one
                 int dest_offset = get_stack_offset(instr.dest);
                 if (dest_offset >= 0) {
