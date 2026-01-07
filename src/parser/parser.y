@@ -112,6 +112,11 @@ std::unique_ptr<ASTNode> make_param(const std::string& name, int idx) {
 
 %start CompUnit
 
+// The classic "dangling else" shift/reduce conflict is expected and
+// correctly handled by Bison's default shift preference (else binds to
+// the closest if). We acknowledge 1 expected conflict.
+%expect 1
+
 %%
 
 // CompUnit -> FuncDef+

@@ -79,11 +79,20 @@ private:
                 var_offset_[p->param_name] = next_offset_;
                 next_offset_ += 4;
 
-                // Generate code to load parameter from argument register
-                // Use special notation: @paramN to indicate it's from aN register
+                // Generate code to load parameter
+                // For args 0-7: load from a0-a7 registers
+                // For args >= 8: load from stack (caller passes on stack)
                 std::string result = current_func_->next_temp();
-                std::string arg_reg = "a" + std::to_string(param_idx);
-                emit(TacOp::LOAD_PARAM, result, arg_reg, ""); // New opcode for param load
+                if (param_idx < 8) {
+                    std::string arg_reg = "a" + std::to_string(param_idx);
+                    emit(TacOp::LOAD_PARAM, result, arg_reg, "");
+                } else {
+                    // For args >= 8, load from stack offset using s0 (caller's sp)
+                    // Prologue saves caller's sp in s0 before frame adjustment
+                    // Extra args are stored at s0+0, s0+4, etc. (call pushes ra at s0+8)
+                    int offset = (param_idx - 8) * 4;
+                    emit(TacOp::LOAD, result, "#s0:" + std::to_string(offset), "");
+                }
                 emit(TacOp::STORE, p->param_name, result, "");
 
                 param_idx++;
@@ -101,8 +110,7 @@ private:
         // Enter new block scope
         scope_level_++;
         block_scope_stack_.push_back(std::vector<std::pair<std::string, int>>());
-        int saved_offset = next_offset_;
-        #// std::cerr << "[DEBUG] Entering block scope " << scope_level_ << ", saved_offset=" << saved_offset << std::endl;
+        int saved_offset = next_offset_;  // Track offset at block entry
 
         for (auto &stmt : block->stmts)
         {
@@ -110,22 +118,16 @@ private:
         }
 
         // Exit block scope: restore shadowed variables
-        #// std::cerr << "[DEBUG] Exiting block, restoring:" << std::endl;
         for (const auto& pair : block_scope_stack_.back()) {
             if (pair.second >= 0) {
-                // Restore the outer scope's offset for this variable
-                #// std::cerr << "[DEBUG]   " << pair.first << " -> " << pair.second << std::endl;
                 var_offset_[pair.first] = pair.second;
             } else {
-                // Variable didn't exist in outer scope, remove it
-                #// std::cerr << "[DEBUG]   " << pair.first << " (remove)" << std::endl;
                 var_offset_.erase(pair.first);
             }
         }
-        // Restore offset to what it was at block entry (discard block-local allocations)
-        next_offset_ = saved_offset;
-        #// std::cerr << "[DEBUG] Restored next_offset_=" << next_offset_ << std::endl;
         block_scope_stack_.pop_back();
+        // Restore offset to discard block-local allocations
+        next_offset_ = saved_offset;
         scope_level_--;
     }
 
@@ -184,14 +186,10 @@ private:
         int old_offset = -1;
         if (var_offset_.find(unique_name) != var_offset_.end()) {
             old_offset = var_offset_[unique_name];
-            #// std::cerr << "[DEBUG] Declaring " << stmt->var_name << " (as " << unique_name << ") shadows old offset " << old_offset << std::endl;
-        } else {
-            #// std::cerr << "[DEBUG] Declaring " << stmt->var_name << " (as " << unique_name << ") at new offset " << next_offset_ << std::endl;
         }
 
         // Assign stack offset
         var_offset_[unique_name] = next_offset_;
-        #// std::cerr << "[DEBUG]   -> Assigned offset " << next_offset_ << " to " << unique_name << std::endl;
 
         // Track this variable in the current block scope with its old offset
         if (!block_scope_stack_.empty()) {
@@ -335,11 +333,55 @@ private:
                 op = TacOp::NE;
                 break;
             case OpType::And:
-                op = TacOp::AND;
-                break;
+            {
+                // Short-circuit AND: evaluate left, if non-zero evaluate right and return it, else return 0
+                std::string left = build_expr(e->left.get());
+                std::string end_label = current_func_->next_label();
+                std::string result = current_func_->next_temp();
+
+                // if left == 0, jump to end with result = 0
+                emit(TacOp::BEQZ, "", left, end_label);
+
+                // left != 0, evaluate right
+                std::string right = build_expr(e->right.get());
+
+                // result = right
+                emit(TacOp::MOVE, result, right, "");
+
+                // Jump to end (skip the "result = 0" code)
+                emit(TacOp::JUMP, "", "", end_label);
+
+                // end_label: result = 0 (left was 0)
+                emit(TacOp::LABEL, "", "", end_label);
+                emit(TacOp::LOAD_IMM, result, "0", "");
+
+                return result;
+            }
             case OpType::Or:
-                op = TacOp::OR;
-                break;
+            {
+                // Short-circuit OR: evaluate left, if non-zero return it, else evaluate right and return it
+                std::string left = build_expr(e->left.get());
+                std::string end_label = current_func_->next_label();
+                std::string result = current_func_->next_temp();
+
+                // if left != 0, jump to end with result = left
+                emit(TacOp::BNEZ, "", left, end_label);
+
+                // left == 0, evaluate right
+                std::string right = build_expr(e->right.get());
+
+                // result = right
+                emit(TacOp::MOVE, result, right, "");
+
+                // Jump to end
+                emit(TacOp::JUMP, "", "", end_label);
+
+                // end_label: result = left (left was non-zero)
+                emit(TacOp::LABEL, "", "", end_label);
+                emit(TacOp::MOVE, result, left, "");
+
+                return result;
+            }
             default:
                 op = TacOp::ADD;
                 break;
@@ -402,7 +444,6 @@ private:
     {
         if (current_func_)
         {
-            #// std::cerr << "[DEBUG-EMIT] " << (int)op << " " << dest << ", " << src1 << ", " << src2 << std::endl;
             current_func_->instrs.emplace_back(op, dest, src1, src2);
         }
     }

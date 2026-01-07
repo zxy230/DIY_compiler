@@ -34,6 +34,8 @@ static bool is_temp_var(const std::string& var) {
 
 void Optimizer::optimize(ProgramIR* program) {
     // Run optimizations in order
+    redundant_load_elimination(program);  // 首先消除冗余的LOAD
+    copy_propagation(program);           // 然后消除冗余的MOVE
     constant_propagation(program);
     constant_folding(program);
     algebraic_simplification(program);
@@ -579,6 +581,127 @@ void Optimizer::dead_code_elimination(ProgramIR* program) {
             if (keep) {
                 new_instrs.push_back(instr);
             }
+        }
+
+        func->instrs = std::move(new_instrs);
+    }
+}
+
+// 复制传播优化：消除冗余的MOVE指令
+// 例如：MOVE .t1, .t0 后跟 ADD .t2, .t1, .t3
+// 可以替换为：ADD .t2, .t0, .t3
+void Optimizer::copy_propagation(ProgramIR* program) {
+    for (auto& func : program->functions) {
+        // 跟踪复制关系：var -> source
+        std::unordered_map<std::string, std::string> copy_map;
+        
+        // 收集所有使用点
+        struct UsePoint {
+            TacInstr* instr;
+            int idx;  // 1 for src1, 2 for src2
+        };
+        std::vector<UsePoint> use_points;
+        
+        for (auto& instr : func->instrs) {
+            if (is_temp_var(instr.src1)) {
+                use_points.push_back({&instr, 1});
+            }
+            if (is_temp_var(instr.src2)) {
+                use_points.push_back({&instr, 2});
+            }
+        }
+        
+        // 迭代传播，直到没有变化
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            copy_map.clear();
+            
+            // 第一遍：建立复制关系
+            for (auto& instr : func->instrs) {
+                if (instr.op == TacOp::MOVE && is_temp_var(instr.dest) && is_temp_var(instr.src1)) {
+                    // MOVE .t1, .t0 表示 .t1 是 .t0 的副本
+                    copy_map[instr.dest] = instr.src1;
+                }
+            }
+            
+            // 第二遍：应用复制传播
+            for (auto& up : use_points) {
+                TacInstr* instr = up.instr;
+                std::string var = (up.idx == 1) ? instr->src1 : instr->src2;
+                
+                // 尝试链式传播：.t2 -> .t1 -> .t0 应该变成 .t2 -> .t0
+                std::string source = var;
+                std::unordered_set<std::string> visited;
+                while (copy_map.find(source) != copy_map.end() && 
+                       visited.find(source) == visited.end()) {
+                    visited.insert(source);
+                    source = copy_map[source];
+                }
+                
+                // 如果找到了最终的源
+                if (source != var) {
+                    if (up.idx == 1) {
+                        instr->src1 = source;
+                    } else {
+                        instr->src2 = source;
+                    }
+                    changed = true;
+                }
+            }
+        }
+        
+        // 移除被传播掉的MOVE指令（它们的dest不再被使用）
+        std::unordered_set<std::string> used_temps;
+        for (auto& instr : func->instrs) {
+            if (instr.op != TacOp::MOVE) {
+                // 收集所有使用的临时变量
+                if (is_temp_var(instr.src1)) used_temps.insert(instr.src1);
+                if (is_temp_var(instr.src2)) used_temps.insert(instr.src2);
+            }
+        }
+        
+        // 移除没有被使用的MOVE指令
+        std::vector<TacInstr> new_instrs;
+        std::unordered_set<std::string> defined;
+        for (auto& instr : func->instrs) {
+            if (instr.op == TacOp::MOVE && is_temp_var(instr.dest)) {
+                // 如果这个MOVE的结果没有被使用，且不是链式传播的中间结果
+                if (used_temps.find(instr.dest) == used_temps.end()) {
+                    continue;  // 跳过这个MOVE
+                }
+            }
+            new_instrs.push_back(instr);
+        }
+        
+        func->instrs = std::move(new_instrs);
+    }
+}
+
+// 消除冗余的LOAD：当一个LOAD紧跟STORE之后，且LOAD的是同一个变量
+// STORE x, .t0 后跟 LOAD .t1, x  ->  MOVE .t1, .t0
+void Optimizer::redundant_load_elimination(ProgramIR* program) {
+    for (auto& func : program->functions) {
+        // 跟踪最近的STORE：变量名 -> temp
+        std::unordered_map<std::string, std::string> recent_store;
+
+        std::vector<TacInstr> new_instrs;
+
+        for (auto& instr : func->instrs) {
+            if (instr.op == TacOp::STORE && !is_temp_var(instr.dest)) {
+                // STORE x, .t0  ->  x最近存储在.t0
+                recent_store[instr.dest] = instr.src1;
+            } else if (instr.op == TacOp::LOAD && !is_temp_var(instr.src1)) {
+                // LOAD .t1, x  ->  检查x最近是否被STORE过
+                auto it = recent_store.find(instr.src1);
+                if (it != recent_store.end()) {
+                    // x最近存储在it->second，用MOVE替代LOAD
+                    new_instrs.emplace_back(TacOp::MOVE, instr.dest, it->second, "");
+                    continue;
+                }
+            }
+
+            new_instrs.push_back(instr);
         }
 
         func->instrs = std::move(new_instrs);

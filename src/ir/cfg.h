@@ -10,6 +10,33 @@ inline bool is_temp(const std::string& s) {
     return !s.empty() && s[0] == '.';
 }
 
+// Helper: Check if a string is a physical register name (a0-a7, t0-t6, s0-s11, etc.)
+// Note: a8-a9 don't exist in RV32 but may appear in TAC - treat them as reserved
+inline bool is_physical_reg(const std::string& s) {
+    if (s.empty()) return false;
+    // Check for a0-a9 (including a8-a9 which don't exist in RV32 but may be in TAC)
+    if (s[0] == 'a' && s.length() == 2 && isdigit(s[1])) {
+        int idx = s[1] - '0';
+        return idx >= 0 && idx <= 9;  // a0-a9 (a8-a9 are reserved names)
+    }
+    if (s[0] == 't' && s.length() == 2 && isdigit(s[1])) {
+        int idx = s[1] - '0';
+        return idx >= 0 && idx <= 6;  // t0-t6
+    }
+    if (s[0] == 't' && s.length() == 2 && s[1] >= '3' && s[1] <= '6') {
+        return true;  // t3-t6
+    }
+    if (s[0] == 's') {
+        if (s.length() == 2 && isdigit(s[1])) {
+            return true;  // s0-s9
+        }
+        if (s.length() == 3 && s[1] == '1' && s[2] >= '0' && s[2] <= '1') {
+            return true;  // s10-s11
+        }
+    }
+    return false;
+}
+
 // Helper: Check if a string is a number
 inline bool is_number(const std::string& s) {
     if (s.empty()) return false;
@@ -238,9 +265,13 @@ void FunctionIR::compute_liveness() {
     // Collect all variables (temps and user vars)
     all_vars.clear();
     for (const auto& instr : instrs) {
-        if (!instr.dest.empty() && !is_temp(instr.dest)) all_vars.insert(instr.dest);
-        if (!instr.src1.empty() && !is_number(instr.src1) && !is_temp(instr.src1)) all_vars.insert(instr.src1);
-        if (!instr.src2.empty() && !is_number(instr.src2) && !is_temp(instr.src2)) all_vars.insert(instr.src2);
+        // Exclude physical register names (a0-a7, t0-t6, s0-s11, etc.)
+        if (!instr.dest.empty() && !is_temp(instr.dest) && !is_physical_reg(instr.dest))
+            all_vars.insert(instr.dest);
+        if (!instr.src1.empty() && !is_number(instr.src1) && !is_temp(instr.src1) && !is_physical_reg(instr.src1))
+            all_vars.insert(instr.src1);
+        if (!instr.src2.empty() && !is_number(instr.src2) && !is_temp(instr.src2) && !is_physical_reg(instr.src2))
+            all_vars.insert(instr.src2);
     }
     // Add temps
     for (const auto& instr : instrs) {

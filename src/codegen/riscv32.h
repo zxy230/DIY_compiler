@@ -2,12 +2,14 @@
 #define RISCV32_H
 
 #include "ir/tac.h"
+#include "codegen/allocator.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <set>
 #include <cctype>
 #include <algorithm>
+#include <sstream>
 
 class RISC32Generator {
 public:
@@ -21,403 +23,283 @@ public:
             generate_function(func.get());
         }
 
+        // Apply peephole optimizations to remove redundant instructions
+        output_ = optimize_peephole_simple(output_);
+
         return output_;
     }
 
 private:
     ProgramIR* program_ir_;
     std::string output_;
-    int func_counter_ = -1;
-    int stack_size_ = 0;
-    std::unordered_map<std::string, int> var_stack_offset_;
-    std::string epilogue_label_;  // Label for epilogue (used by RET)
-
-    void emit(const std::string& line) {
-        output_ += line + "\n";
-    }
 
     void generate_function(FunctionIR* func) {
-        func_counter_++;
-        int var_stack_size = 0;  // Stack space for variables (starts at 0)
-        var_stack_offset_.clear();
-
-        // First pass: collect stack slots for user variables FIRST
-        // Then collect stack slots for temp variables that are actually used
-        #// std::cerr << "[DEBUG-CODEGEN] First pass: allocating stack slots for user variables" << std::endl;
-        for (auto& instr : func->instrs) {
-            // User variables (dest of STORE) - allocate stack slots FIRST
-            if (instr.op == TacOp::STORE) {
-                if (!is_temp_var(instr.dest) && var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
-                    var_stack_offset_[instr.dest] = var_stack_size + 4;  // +4 for ra
-                    #// std::cerr << "[DEBUG-CODEGEN]   " << instr.dest << " -> offset " << (var_stack_size + 4) << std::endl;
-                    var_stack_size += 4;
-                }
-            }
-        }
-        // Second pass: temp variables that need stack slots
-        // Only allocate for temps that are:
-        // 1. LOAD dest (will be used later)
-        // 2. LOAD_IMM dest (will be used later)
-        // 3. Results of binary operations
-        for (auto& instr : func->instrs) {
-            // Skip LOAD_IMM temps if they're immediately moved to a0
-            if (instr.op == TacOp::LOAD_IMM) {
-                // Check if this temp is immediately used in a MOVE to a0
-                auto it = std::next(std::find_if(func->instrs.begin(), func->instrs.end(),
-                    [&](const TacInstr& i) { return &i == &instr; }));
-                if (it != func->instrs.end() && it->op == TacOp::MOVE && it->dest == "a0" && it->src1 == instr.dest) {
-                    // This temp is only used for MOVE to a0, don't allocate stack slot
-                    continue;
-                }
-            }
-
-            if (instr.op == TacOp::LOAD && is_temp_var(instr.dest) &&
-                var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
-                var_stack_offset_[instr.dest] = var_stack_size + 4;  // +4 for ra
-                var_stack_size += 4;
-            }
-            if (instr.op == TacOp::LOAD_IMM && is_temp_var(instr.dest) &&
-                var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
-                var_stack_offset_[instr.dest] = var_stack_size + 4;  // +4 for ra
-                var_stack_size += 4;
-            }
-            // Allocate stack slots for binary operation results (ADD, SUB, etc.)
-            if ((instr.op == TacOp::ADD || instr.op == TacOp::SUB || instr.op == TacOp::MUL ||
-                 instr.op == TacOp::DIV || instr.op == TacOp::MOD || instr.op == TacOp::LT ||
-                 instr.op == TacOp::GT || instr.op == TacOp::LE || instr.op == TacOp::GE ||
-                 instr.op == TacOp::EQ || instr.op == TacOp::NE || instr.op == TacOp::AND ||
-                 instr.op == TacOp::OR) &&
-                is_temp_var(instr.dest) &&
-                var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
-                var_stack_offset_[instr.dest] = var_stack_size + 4;  // +4 for ra
-                var_stack_size += 4;
-            }
-            // Allocate stack slots for CALL results
-            if (instr.op == TacOp::CALL && is_temp_var(instr.dest) &&
-                var_stack_offset_.find(instr.dest) == var_stack_offset_.end()) {
-                var_stack_offset_[instr.dest] = var_stack_size + 4;  // +4 for ra
-                var_stack_size += 4;
-            }
+        // Skip internal functions starting with '.'
+        if (!func->name.empty() && func->name[0] == '.') {
+            return;
         }
 
-        // Stack size includes space for ra (4 bytes) + variable space
-        // Always allocate space for ra (4 bytes) + variable space
-        stack_size_ = var_stack_size + 4;
+        output_ += "\t.globl " + func->name + "\n";
+        output_ += func->name + ":\n";
 
-        // Header
-        emit(".text");
-        emit("");
-        emit(".globl " + func->name);
-        emit(func->name + ":");
+        // Generate prologue
+        output_ += "prologue_" + func->name + ":\n";
+        // Use s0 as frame pointer
+        output_ += "\taddi s0, sp, 0\n";
+        output_ += "\taddi sp, sp, -4\n";
+        output_ += "\tsw ra, 0(sp)\n";
 
-        // Set epilogue label for this function
-        epilogue_label_ = "epilogue_" + std::to_string(func_counter_);
+        // Allocate register and generate code
+        LinearScanAllocator allocator(func);
+        allocator.allocate();
 
-        // Prologue label
-        emit("prologue_" + func->name + ":");
+        // Generate TAC instructions
+        for (size_t i = 0; i < func->instrs.size(); i++) {
+            const auto& instr = func->instrs[i];
+            const auto& alloc = allocator.get_allocation(i);
 
-        // Prologue - only if we need stack space for user variables
-        bool needs_frame = (stack_size_ > 0);
-        if (needs_frame) {
-            int frame_size = ((stack_size_ + 15) / 16) * 16;
-            if (frame_size < 16) frame_size = 16;
-            adjust_sp(-frame_size);
-            emit("    sw ra, 0(sp)");
+            generate_instruction(instr, alloc);
         }
 
-        // Generate body - use simple label
-        emit("label" + std::to_string(func_counter_) + ":");
-
-        for (auto& instr : func->instrs) {
-            generate_instr(instr);
-        }
-
-        // Epilogue label
-        emit(epilogue_label_ + ":");
-
-        // Epilogue - only if we created a frame
-        if (needs_frame) {
-            int frame_size = ((stack_size_ + 15) / 16) * 16;
-            if (frame_size < 16) frame_size = 16;
-            emit("    lw ra, 0(sp)");
-            adjust_sp(frame_size);
-        }
-        emit("    jr ra");
+        // Generate epilogue
+        output_ += "epilogue_" + func->name + ":\n";
+        output_ += "\tlw ra, 0(sp)\n";
+        output_ += "\taddi sp, sp, 4\n";
+        output_ += "\tret\n";
     }
 
-    bool is_temp_var(const std::string& var) {
-        return !var.empty() && var[0] == '.';
-    }
-
-    // Adjust stack pointer by a given amount (can be > 2047)
-    void adjust_sp(int delta) {
-        if (delta == 0) return;
-
-        if (delta >= -2047 && delta <= 2047) {
-            if (delta < 0) {
-                emit("    addi sp, sp, " + std::to_string(delta));
-            } else {
-                emit("    addi sp, sp, " + std::to_string(delta));
-            }
-        } else {
-            // For large adjustments, use lui + addi
-            int abs_delta = delta > 0 ? delta : -delta;
-            int hi = (abs_delta >> 12) & 0xFFFFF;
-            int lo = abs_delta & 0xFFF;
-            if (lo >= 2048) {
-                hi += 1;
-                lo -= 4096;
-            }
-            // lui t0, hi
-            emit("    lui t0, " + std::to_string(hi));
-            if (lo != 0) {
-                emit("    addi t0, t0, " + std::to_string(lo));
-            }
-            if (delta > 0) {
-                emit("    add sp, sp, t0");  // sp = sp + delta
-            } else {
-                emit("    sub sp, sp, t0");  // sp = sp - delta
-            }
+    void generate_instruction(const TacInstr& instr, const LinearScanAllocator::InstrAlloc& alloc) {
+        // Handle labels
+        if (instr.op == TacOp::LABEL) {
+            output_ += instr.src2 + ":\n";
+            return;
         }
-    }
 
-    bool is_label(const std::string& s) {
-        if (s.empty()) return false;
-        return s.substr(0, 2) == ".L" ||
-               s.substr(0, 5) == "label" ||
-               s.substr(0, 3) == "ret" ||
-               s.substr(0, 8) == "prologue" ||
-               s.substr(0, 8) == "epilogue" ||
-               s.substr(0, 5) == "break" ||
-               s.substr(0, 9) == "continue";
-    }
+        // Get register allocations (using const-safe methods)
+        auto dest_it = alloc.reg_map.find(instr.dest);
+        std::string dest_reg = dest_it != alloc.reg_map.end() ? dest_it->second : "";
 
-    bool is_number(const std::string& s) {
-        if (s.empty()) return false;
-        size_t i = 0;
-        if (s[0] == '-') {
-            if (s.length() == 1) return false;
-            i = 1;
-        }
-        for (; i < s.length(); i++) {
-            if (!isdigit(s[i])) return false;
-        }
-        return true;
-    }
+        auto src1_it = alloc.reg_map.find(instr.src1);
+        std::string src1_reg = src1_it != alloc.reg_map.end() ? src1_it->second : "";
 
-    // Get stack offset for a variable (adds +4 for return address)
-    int get_stack_offset(const std::string& var) {
-        auto it = var_stack_offset_.find(var);
-        if (it != var_stack_offset_.end()) {
-            return it->second + 4;  // +4 for ra at offset 0
-        }
-        return -1;
-    }
+        auto src2_it = alloc.reg_map.find(instr.src2);
+        std::string src2_reg = src2_it != alloc.reg_map.end() ? src2_it->second : "";
 
-    void generate_instr(const TacInstr& instr) {
+        // Handle spilled variables
+        auto dest_offset_it = alloc.spill_offset.find(instr.dest);
+        int dest_offset = dest_offset_it != alloc.spill_offset.end() ? dest_offset_it->second : -1;
+
+        auto src1_offset_it = alloc.spill_offset.find(instr.src1);
+        int src1_offset = src1_offset_it != alloc.spill_offset.end() ? src1_offset_it->second : -1;
+
         switch (instr.op) {
-            case TacOp::LABEL:
-                emit(instr.src2 + ":");
-                break;
-
-            case TacOp::LOAD_IMM: {
-                emit("    li t0, " + instr.src1);
-                // Store to stack slot if temp has one
-                int offset = get_stack_offset(instr.dest);
-                if (offset >= 0) {
-                    store_to_stack_offset("t0", offset);
+            case TacOp::LOAD_IMM:
+                if (is_number(instr.src1)) {
+                    output_ += "\tli " + dest_reg + ", " + instr.src1 + "\n";
+                } else if (src1_offset >= 0) {
+                    output_ += "\tlw " + dest_reg + ", " + std::to_string(src1_offset) + "(s0)\n";
+                } else {
+                    output_ += "\taddi " + dest_reg + ", " + src1_reg + ", 0\n";
                 }
                 break;
-            }
 
-            case TacOp::ADD: {
-                load_src(instr.src1, "t0");
-                load_src_preserve(instr.src2, "t1", "t0");
-                emit("    add t2, t0, t1");
-                store_dest(instr.dest, "t2");
+            case TacOp::ADD:
+                if (is_number(instr.src2)) {
+                    output_ += "\taddi " + dest_reg + ", " + src1_reg + ", " + instr.src2 + "\n";
+                } else {
+                    output_ += "\tadd " + dest_reg + ", " + src1_reg + ", " + src2_reg + "\n";
+                }
                 break;
-            }
 
-            case TacOp::SUB: {
-                load_src(instr.src1, "t0");
-                load_src_preserve(instr.src2, "t1", "t0");
-                emit("    sub t2, t0, t1");
-                store_dest(instr.dest, "t2");
+            case TacOp::SUB:
+                if (is_number(instr.src2)) {
+                    output_ += "\taddi " + dest_reg + ", " + src1_reg + ", -" + instr.src2 + "\n";
+                } else {
+                    output_ += "\tsub " + dest_reg + ", " + src1_reg + ", " + src2_reg + "\n";
+                }
                 break;
-            }
 
-            case TacOp::MUL: {
-                load_src(instr.src1, "t0");
-                load_src_preserve(instr.src2, "t1", "t0");
-                emit("    mul t2, t0, t1");
-                store_dest(instr.dest, "t2");
+            case TacOp::MUL:
+                output_ += "\tmul " + dest_reg + ", " + src1_reg + ", " + src2_reg + "\n";
                 break;
-            }
 
-            case TacOp::DIV: {
-                load_src(instr.src1, "t0");
-                load_src_preserve(instr.src2, "t1", "t0");
-                emit("    div t2, t0, t1");
-                store_dest(instr.dest, "t2");
+            case TacOp::DIV:
+                output_ += "\tdiv " + dest_reg + ", " + src1_reg + ", " + src2_reg + "\n";
                 break;
-            }
 
-            case TacOp::MOD: {
-                load_src(instr.src1, "t0");
-                load_src_preserve(instr.src2, "t1", "t0");
-                emit("    rem t2, t0, t1");
-                store_dest(instr.dest, "t2");
+            case TacOp::MOD:
+                output_ += "\trem " + dest_reg + ", " + src1_reg + ", " + src2_reg + "\n";
                 break;
-            }
 
-            case TacOp::LT: {
-                load_src(instr.src1, "t0");
-                load_src_preserve(instr.src2, "t1", "t0");
-                emit("    slt t2, t0, t1");
-                store_dest(instr.dest, "t2");
-                break;
-            }
-
-            case TacOp::GT: {
-                load_src(instr.src1, "t0");
-                load_src_preserve(instr.src2, "t1", "t0");
-                emit("    sgt t2, t0, t1");
-                store_dest(instr.dest, "t2");
-                break;
-            }
-
-            case TacOp::LE: {
-                load_src(instr.src1, "t0");
-                load_src_preserve(instr.src2, "t1", "t0");
-                emit("    slt t2, t1, t0");
-                store_dest(instr.dest, "t2");
-                break;
-            }
-
+            case TacOp::EQ:
+            case TacOp::NE:
+            case TacOp::LT:
+            case TacOp::GT:
+            case TacOp::LE:
             case TacOp::GE: {
-                load_src(instr.src1, "t0");
-                load_src_preserve(instr.src2, "t1", "t0");
-                emit("    slt t2, t0, t1");
-                emit("    xori t2, t2, 1");
-                store_dest(instr.dest, "t2");
-                break;
-            }
+                // Compare and set dest to 0 or 1
+                std::string cmpInstr = "";
+                std::string resultInstr = "";  // Instruction to convert result (seqz/snez)
+                bool isImm = is_number(instr.src2);
 
-            case TacOp::EQ: {
-                load_src(instr.src1, "t0");
-                load_src_preserve(instr.src2, "t1", "t0");
-                emit("    sub t2, t0, t1");
-                emit("    seqz t2, t2");
-                store_dest(instr.dest, "t2");
-                break;
-            }
-
-            case TacOp::NE: {
-                load_src(instr.src1, "t0");
-                load_src_preserve(instr.src2, "t1", "t0");
-                emit("    sub t2, t0, t1");
-                emit("    snez t2, t2");
-                store_dest(instr.dest, "t2");
-                break;
-            }
-
-            case TacOp::AND: {
-                load_src(instr.src1, "t0");
-                load_src_preserve(instr.src2, "t1", "t0");
-                emit("    and t2, t0, t1");
-                store_dest(instr.dest, "t2");
-                break;
-            }
-
-            case TacOp::OR: {
-                load_src(instr.src1, "t0");
-                load_src_preserve(instr.src2, "t1", "t0");
-                emit("    or t2, t0, t1");
-                store_dest(instr.dest, "t2");
-                break;
-            }
-
-            case TacOp::NOT: {
-                load_src(instr.src1, "t0");
-                emit("    xori t2, t0, 1");
-                store_dest(instr.dest, "t2");
-                break;
-            }
-
-            case TacOp::LOAD: {
-                // Load from src into t0
-                int src_offset = get_stack_offset(instr.src1);
-                if (src_offset >= 0) {
-                    load_from_stack_offset("t0", src_offset);
+                if (instr.op == TacOp::EQ) {
+                    cmpInstr = isImm ? "xori" : "sub";
                 }
-                // If src_offset < 0, the value is already in t0 (temp var case)
-                // Store to dest's stack slot if it has one
-                int dest_offset = get_stack_offset(instr.dest);
+                else if (instr.op == TacOp::NE) {
+                    cmpInstr = isImm ? "xori" : "sub";
+                    resultInstr = "seqz";  // NE: result is 1 if xori result is 0
+                }
+                else if (instr.op == TacOp::LT) {
+                    cmpInstr = "slt";
+                }
+                else if (instr.op == TacOp::GE) {
+                    cmpInstr = "slt";
+                    resultInstr = "seqz";  // GE: result is 1 if slt result is 0
+                }
+                else if (instr.op == TacOp::LE) {
+                    cmpInstr = "slt";
+                    std::swap(src1_reg, src2_reg);  // LE: a <= b is b < a
+                }
+                else if (instr.op == TacOp::GT) {
+                    cmpInstr = "slt";
+                    std::swap(src1_reg, src2_reg);  // GT: a > b is b < a
+                    resultInstr = "seqz";  // GT: result is 1 if slt result is 0
+                }
+
+                if (isImm && (instr.op == TacOp::EQ || instr.op == TacOp::NE)) {
+                    // For EQ/NE with immediate, use xori
+                    output_ += "\t" + cmpInstr + " " + dest_reg + ", " + src1_reg + ", " + instr.src2 + "\n";
+                    if (!resultInstr.empty()) {
+                        output_ += "\t" + resultInstr + " " + dest_reg + ", " + dest_reg + "\n";
+                    }
+                } else if (!resultInstr.empty()) {
+                    // For comparisons that need result inversion (NE, GT, GE with registers)
+                    output_ += "\t" + cmpInstr + " " + dest_reg + ", " + src1_reg + ", " + src2_reg + "\n";
+                    output_ += "\t" + resultInstr + " " + dest_reg + ", " + dest_reg + "\n";
+                } else {
+                    // LT, LE, EQ with registers - no inversion needed
+                    output_ += "\t" + cmpInstr + " " + dest_reg + ", " + src1_reg + ", " + src2_reg + "\n";
+                }
+                break;
+            }
+
+            case TacOp::LOAD:
+                if (src1_offset >= 0) {
+                    output_ += "\tlw " + dest_reg + ", " + std::to_string(src1_offset) + "(s0)\n";
+                }
+                break;
+
+            case TacOp::LOAD_PARAM:
+                // Load parameter from argument register (a0-a7) to destination
+                // src1 = register name (e.g., "a0", "a1"), dest = temp variable
+                if (!instr.src1.empty()) {
+                    output_ += "\taddi " + dest_reg + ", " + instr.src1 + ", 0\n";
+                }
+                break;
+
+            case TacOp::STORE:
                 if (dest_offset >= 0) {
-                    store_to_stack_offset("t0", dest_offset);
+                    if (is_number(instr.src1)) {
+                        output_ += "\tli t0, " + instr.src1 + "\n";
+                        output_ += "\tsw t0, " + std::to_string(dest_offset) + "(s0)\n";
+                    } else if (src1_offset >= 0) {
+                        output_ += "\tlw t0, " + std::to_string(src1_offset) + "(s0)\n";
+                        output_ += "\tsw t0, " + std::to_string(dest_offset) + "(s0)\n";
+                    } else {
+                        output_ += "\tsw " + src1_reg + ", " + std::to_string(dest_offset) + "(s0)\n";
+                    }
+                }
+                break;
+
+            case TacOp::BEQZ:
+            case TacOp::BNEZ: {
+                std::string condReg;
+                if (is_number(instr.src1)) {
+                    output_ += "\tli t0, " + instr.src1 + "\n";
+                    condReg = "t0";
+                } else if (src1_offset >= 0) {
+                    output_ += "\tlw t0, " + std::to_string(src1_offset) + "(s0)\n";
+                    condReg = "t0";
+                } else {
+                    condReg = src1_reg;
+                }
+
+                std::string jumpLabel = instr.src2;  // Label is in src2 for BEQZ/BNEZ
+                if (instr.op == TacOp::BEQZ) {
+                    output_ += "\tbeqz " + condReg + ", " + jumpLabel + "\n";
+                } else {
+                    output_ += "\tbnez " + condReg + ", " + jumpLabel + "\n";
                 }
                 break;
             }
 
-            case TacOp::LOAD_PARAM: {
-                emit("    mv t0, " + instr.src1);
-                store_dest(instr.dest, "t0");
+            case TacOp::JUMP:
+                output_ += "\tj " + instr.src2 + "\n";  // Label is in src2 for JUMP
                 break;
-            }
 
-            case TacOp::STORE: {
-                load_src(instr.src1, "t0");
-                store_dest(instr.dest, "t0");
+            case TacOp::RET:
+                if (!instr.src1.empty()) {
+                    if (is_number(instr.src1)) {
+                        output_ += "\tli a0, " + instr.src1 + "\n";
+                    } else {
+                        auto src1_offset_it = alloc.spill_offset.find(instr.src1);
+                        int src1_offset = src1_offset_it != alloc.spill_offset.end() ? src1_offset_it->second : -1;
+                        if (src1_offset >= 0) {
+                            output_ += "\tlw a0, " + std::to_string(src1_offset) + "(s0)\n";
+                        } else {
+                            auto it = alloc.reg_map.find(instr.src1);
+                            std::string src_reg = it != alloc.reg_map.end() ? it->second : "";
+                            output_ += "\taddi a0, " + src_reg + ", 0\n";
+                        }
+                    }
+                }
                 break;
-            }
 
-            case TacOp::BEQZ: {
-                load_src(instr.src1, "t0");
-                emit("    beqz t0, " + instr.src2);
+            case TacOp::PHI:
+                // PHI nodes are handled during SSA transformation
                 break;
-            }
-
-            case TacOp::BNEZ: {
-                load_src(instr.src1, "t0");
-                emit("    bnez t0, " + instr.src2);
-                break;
-            }
-
-            case TacOp::JUMP: {
-                emit("    j " + instr.src2);
-                break;
-            }
-
-            case TacOp::CALL: {
-                emit("    call " + instr.src1);
-                store_dest(instr.dest, "a0");
-                break;
-            }
 
             case TacOp::MOVE: {
-                if (instr.dest == "a0") {
-                    if (is_number(instr.src1)) {
-                        emit("    li a0, " + instr.src1);
-                    } else {
-                        // Load src1 into a0 (may need to load from stack for temps)
-                        load_src(instr.src1, "a0");
-                    }
+                // Move src1 to dest
+                // dest = destination register (e.g., "a0" for return value)
+                // src1 = source value
+                if (is_number(instr.src1)) {
+                    output_ += "\tli " + instr.dest + ", " + instr.src1 + "\n";
                 } else {
-                    load_src(instr.src1, "t0");
-                    store_dest(instr.dest, "t0");
+                    auto it = alloc.reg_map.find(instr.src1);
+                    std::string src_reg = it != alloc.reg_map.end() ? it->second : "";
+                    output_ += "\taddi " + instr.dest + ", " + src_reg + ", 0\n";
                 }
-                break;
-            }
-
-            case TacOp::RET: {
-                // Jump to epilogue instead of just returning
-                emit("    j " + epilogue_label_);
                 break;
             }
 
             case TacOp::PARAM: {
-                int param_idx = std::stoi(instr.dest.substr(1));
-                load_src(instr.src1, "a" + std::to_string(param_idx));
+                // Load argument into specified register (a0, a1, etc.)
+                // dest = register name (a0, a1, etc.)
+                // src1 = argument value
+                if (is_number(instr.src1)) {
+                    output_ += "\tli " + instr.dest + ", " + instr.src1 + "\n";
+                } else {
+                    auto it = alloc.reg_map.find(instr.src1);
+                    std::string src_reg = it != alloc.reg_map.end() ? it->second : "";
+                    output_ += "\taddi " + instr.dest + ", " + src_reg + ", 0\n";
+                }
+                break;
+            }
+
+            case TacOp::CALL: {
+                // Function name is in src1 for CALL
+                // Arguments are already loaded via PARAM instructions
+                output_ += "\tcall " + instr.src1 + "\n";
+
+                // Move return value to destination
+                if (!instr.dest.empty()) {
+                    if (dest_offset >= 0) {
+                        output_ += "\tsw a0, " + std::to_string(dest_offset) + "(s0)\n";
+                    } else {
+                        output_ += "\taddi " + dest_reg + ", a0, 0\n";
+                    }
+                }
                 break;
             }
 
@@ -426,136 +308,197 @@ private:
         }
     }
 
-    // Load source operand into register
-    void load_src(const std::string& src, const std::string& reg) {
-        if (is_label(src) || src.empty()) return;
+    bool is_number(const std::string& s) const {
+        if (s.empty()) return false;
+        size_t i = 0;
+        if (s[0] == '-') {
+            if (s.length() == 1) return false;
+            i = 1;
+        }
+        for (; i < s.size(); i++) {
+            if (!isdigit(s[i])) return false;
+        }
+        return !s.empty() && (s[0] != '-' || s.size() > 1);
+    }
 
-        // Check if it's a number
-        if (is_number(src)) {
-            emit("    li " + reg + ", " + src);
-            return;
+    // Simple peephole optimizer - removes redundant mv/addi instructions
+    std::string optimize_peephole_simple(const std::string& code) {
+        std::vector<std::string> lines;
+        std::stringstream ss(code);
+        std::string line;
+        while (std::getline(ss, line)) {
+            lines.push_back(line);
         }
 
-        // For temp variables
-        if (is_temp_var(src)) {
-            int offset = get_stack_offset(src);
-            if (offset >= 0) {
-                // Temp has a stack slot - load from stack
-                load_from_stack_offset(reg, offset);
-            } else {
-                // Temp has no stack slot - value is in t0, just move it
-                if (reg != "t0") {
-                    emit("    mv " + reg + ", t0");
+        // Track register equivalence: reg_equiv[reg] = parent_reg
+        // If reg_equiv[reg] = parent, it means reg is an alias for parent
+        std::unordered_map<std::string, std::string> reg_equiv;
+
+        // Track value origin: value_origin[reg] = original_reg_that_holds_the_value
+        // Keyed by the ORIGINAL register name, not the alias
+        std::unordered_map<std::string, std::string> value_origin;
+
+        // Find the ultimate source of a register (follow alias chain)
+        auto find_alias = [&](const std::string& reg, auto&& find_ref) -> std::string {
+            if (reg_equiv.find(reg) == reg_equiv.end()) {
+                return reg;
+            }
+            std::string src = find_ref(reg_equiv[reg], find_ref);
+            reg_equiv[reg] = src;  // Path compression
+            return src;
+        };
+
+        // Find the original source of a register's value
+        // Follows alias chain to find the ultimate register, then looks up its origin
+        auto find_origin = [&](const std::string& reg) -> std::string {
+            // First, find the ultimate alias by following the chain without path compression
+            std::string alias = reg;
+            std::string current = reg;
+            while (reg_equiv.find(current) != reg_equiv.end()) {
+                current = reg_equiv[current];
+            }
+            alias = current;
+            // Look up origin using the alias
+            if (value_origin.find(alias) != value_origin.end()) {
+                return value_origin[alias];
+            }
+            // If no origin, return the final alias
+            return alias;
+        };
+
+        // Make dest an alias of src
+        auto make_alias = [&](const std::string& dest, const std::string& src) {
+            std::string dest_alias = find_alias(dest, find_alias);
+            std::string src_alias = find_alias(src, find_alias);
+
+            if (dest_alias != src_alias) {
+                // Different aliases: link dest_alias to src_alias
+                reg_equiv[dest_alias] = src_alias;
+            }
+            // Set origin for the ORIGINAL dest to track where its value came from
+            if (value_origin.find(dest) == value_origin.end() || dest_alias != dest) {
+                // Find the ultimate alias of src WITHOUT path compression
+                std::string src_origin = src;
+                std::string current = src;
+                while (reg_equiv.find(current) != reg_equiv.end()) {
+                    current = reg_equiv[current];
+                }
+                src_origin = current;
+                // But if src has an origin, use that instead
+                if (value_origin.find(src) != value_origin.end()) {
+                    src_origin = value_origin[src];
+                }
+                value_origin[dest] = src_origin;
+            }
+        };
+
+        // Set a register's value origin (called for li, arithmetic, etc.)
+        auto set_origin = [&](const std::string& reg, const std::string& origin) {
+            value_origin[reg] = origin;
+        };
+
+        // First pass: build equivalence and origin tracking
+        for (size_t i = 0; i < lines.size(); i++) {
+            std::string& current = lines[i];
+
+            // Skip labels and empty lines (after trimming whitespace)
+            std::string trimmed = current;
+            trimmed.erase(0, trimmed.find_first_not_of(" \t"));
+            if (trimmed.empty() || trimmed.back() == ':') {
+                continue;
+            }
+
+            std::string instr;
+            std::stringstream ss2(current);
+            ss2 >> instr;
+
+            if (instr == "li") {
+                std::string reg, imm;
+                ss2 >> reg >> imm;
+                reg.erase(std::remove(reg.begin(), reg.end(), ','), reg.end());
+                set_origin(reg, reg);
+            }
+            else if (instr == "add" || instr == "sub" || instr == "mul" ||
+                     instr == "div" || instr == "rem" || instr == "slt" ||
+                     instr == "sgt" || instr == "and" || instr == "or") {
+                std::string dest;
+                ss2 >> dest;
+                dest.erase(std::remove(dest.begin(), dest.end(), ','), dest.end());
+                reg_equiv.erase(dest);
+                set_origin(dest, dest);
+            }
+            else if (instr == "addi") {
+                std::string dest, src, imm;
+                ss2 >> dest >> src >> imm;
+                dest.erase(std::remove(dest.begin(), dest.end(), ','), dest.end());
+                src.erase(std::remove(src.begin(), src.end(), ','), src.end());
+                imm.erase(std::remove(imm.begin(), imm.end(), ','), imm.end());
+
+                if (imm == "0" && dest != src) {
+                    make_alias(dest, src);
+                } else {
+                    reg_equiv.erase(dest);
+                    set_origin(dest, dest);
                 }
             }
-            return;
+            else if (instr == "xori" || instr == "seqz" || instr == "snez" ||
+                     instr == "lui" || instr == "lw") {
+                std::string reg;
+                ss2 >> reg;
+                reg.erase(std::remove(reg.begin(), reg.end(), ','), reg.end());
+                reg_equiv.erase(reg);
+                set_origin(reg, reg);
+            }
         }
 
-        // Load from stack for user variables
-        int offset = get_stack_offset(src);
-        if (offset >= 0) {
-            load_from_stack_offset(reg, offset);
-        }
-    }
+        // Second pass: remove redundant instructions based on origin tracking
+        for (size_t i = 0; i < lines.size(); i++) {
+            std::string& current = lines[i];
+            std::string trimmed = current;
+            trimmed.erase(0, trimmed.find_first_not_of(" \t"));
+            if (trimmed.empty() || trimmed.back() == ':') continue;
 
-    // Load source operand into register, preserving another register
-    void load_src_preserve(const std::string& src, const std::string& reg, const std::string& preserve_reg) {
-        if (is_label(src) || src.empty()) return;
+            std::stringstream ss2(current);
+            std::string instr;
+            ss2 >> instr;
 
-        // Check if it's a number - no need to preserve when loading immediate
-        if (is_number(src)) {
-            emit("    li " + reg + ", " + src);
-            return;
-        }
+            if (instr == "addi") {
+                std::string dest, src, imm;
+                ss2 >> dest >> src >> imm;
+                dest.erase(std::remove(dest.begin(), dest.end(), ','), dest.end());
+                src.erase(std::remove(src.begin(), src.end(), ','), src.end());
+                imm.erase(std::remove(imm.begin(), imm.end(), ','), imm.end());
 
-        // For temp variables without stack slots (like results of LOAD_IMM),
-        // the value is in t0, just move it if needed
-        if (is_temp_var(src)) {
-            int offset = get_stack_offset(src);
-            if (offset < 0) {
-                // Temp has no stack slot - value is in t0
-                if (reg != "t0") {
-                    emit("    mv " + reg + ", t0");
+                if (imm == "0") {
+                    // Don't remove addi to a0 - it's needed for return value
+                    if (dest == "a0") {
+                        continue;
+                    }
+                    std::string origin_dest = find_origin(dest);
+                    std::string origin_src = find_origin(src);
+
+                    if (origin_dest == origin_src) {
+                        lines[i] = "";
+                    }
                 }
-                return;
             }
-            // Temp has a stack slot - load from stack with preservation
-            emit("    mv t6, " + preserve_reg);
-            load_from_stack_offset(reg, offset);
-            emit("    mv " + preserve_reg + ", t6");
-            return;
         }
 
-        // Load from stack for user variables, preserving preserve_reg
-        int offset = get_stack_offset(src);
-        emit("    mv t6, " + preserve_reg);
-        if (offset >= 0) {
-            load_from_stack_offset(reg, offset);
-        }
-        emit("    mv " + preserve_reg + ", t6");
-    }
-
-    // Store register value to destination
-    void store_dest(const std::string& dest, const std::string& reg) {
-        if (is_label(dest) || dest.empty()) return;
-        // Note: we don't skip "a0" anymore - the caller should handle that if needed
-
-        int offset = get_stack_offset(dest);
-        if (offset >= 0) {
-            store_to_stack_offset(reg, offset);
-        }
-    }
-
-    // Store to stack with offset, handling large offsets (> 2047)
-    void store_to_stack_offset(const std::string& reg, int offset) {
-        if (offset <= 2047) {
-            emit("    sw " + reg + ", " + std::to_string(offset) + "(sp)");
-        } else {
-            // For large offsets, use lui + addi to compute address
-            // sw reg, offset(sp) becomes:
-            //   lui t0, %hi(offset)
-            //   addi t0, t0, %lo(offset)
-            //   sw reg, 0(t0)
-            int hi = (offset >> 12) & 0xFFFFF;  // Upper 20 bits
-            int lo = offset & 0xFFF;  // Lower 12 bits (signed)
-            if (lo >= 2048) {
-                // Adjust hi/lo for signed lower part
-                hi += 1;
-                lo -= 4096;
+        // Remove empty lines
+        std::vector<std::string> result;
+        for (const auto& l : lines) {
+            if (!l.empty()) {
+                result.push_back(l);
             }
-            emit("    lui t0, " + std::to_string(hi));
-            if (lo != 0) {
-                emit("    addi t0, t0, " + std::to_string(lo));
-            }
-            emit("    add t0, sp, t0");
-            emit("    sw " + reg + ", 0(t0)");
         }
-    }
 
-    // Load from stack with offset, handling large offsets (> 2047)
-    void load_from_stack_offset(const std::string& reg, int offset) {
-        if (offset <= 2047) {
-            emit("    lw " + reg + ", " + std::to_string(offset) + "(sp)");
-        } else {
-            // For large offsets, use lui + addi to compute address
-            // lw reg, offset(sp) becomes:
-            //   lui t0, %hi(offset)
-            //   addi t0, t0, %lo(offset)
-            //   lw reg, 0(t0)
-            int hi = (offset >> 12) & 0xFFFFF;  // Upper 20 bits
-            int lo = offset & 0xFFF;  // Lower 12 bits (signed)
-            if (lo >= 2048) {
-                // Adjust hi/lo for signed lower part
-                hi += 1;
-                lo -= 4096;
-            }
-            emit("    lui t0, " + std::to_string(hi));
-            if (lo != 0) {
-                emit("    addi t0, t0, " + std::to_string(lo));
-            }
-            emit("    add t0, sp, t0");
-            emit("    lw " + reg + ", 0(t0)");
+        // Reconstruct
+        std::string output;
+        for (const auto& l : result) {
+            output += l + "\n";
         }
+
+        return output;
     }
 };
 

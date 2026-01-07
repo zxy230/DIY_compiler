@@ -4,6 +4,7 @@
 #include "ir/tac.h"
 #include <unordered_map>
 #include <string>
+#include <unordered_set>
 
 class Optimizer {
 public:
@@ -15,6 +16,8 @@ public:
     static void constant_folding(ProgramIR* program);
     static void dead_code_elimination(ProgramIR* program);
     static void algebraic_simplification(ProgramIR* program);
+    static void copy_propagation(ProgramIR* program);  // 消除冗余的MOVE指令
+    static void redundant_load_elimination(ProgramIR* program);  // 消除冗余的LOAD
 
 private:
     // Helper for constant folding a single instruction
